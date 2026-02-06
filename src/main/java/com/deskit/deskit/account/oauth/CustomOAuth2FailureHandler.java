@@ -30,7 +30,7 @@ public class CustomOAuth2FailureHandler extends SimpleUrlAuthenticationFailureHa
 		response.setContentType("text/html;charset=UTF-8");
 		response.setCharacterEncoding(StandardCharsets.UTF_8.name());
 		response.getWriter().write(
-				"<script>alert('" + escapedMessage + "'); window.location.href='https://ssg.deskit.o-r.kr/login';</script>"
+				"<script>alert('" + escapedMessage + "'); window.location.href='http://localhost:5173/login';</script>"
 		);
 	}
 
@@ -41,7 +41,7 @@ public class CustomOAuth2FailureHandler extends SimpleUrlAuthenticationFailureHa
 				return error.getDescription();
 			}
 		}
-		return "로그인에 실패했습니다.";
+		return "로그?�에 ?�패?�습?�다.";
 	}
 
 	private String escapeForScript(String message) {

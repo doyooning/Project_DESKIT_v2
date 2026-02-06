@@ -99,7 +99,7 @@ public class InvitationService {
 
         invitationRepository.save(invitation);
 
-        String inviteUrl = "https://ssg.deskit.o-r.kr/signup?invite=" +
+        String inviteUrl = "http://localhost:5173/signup?invite=" +
                 URLEncoder.encode(token, StandardCharsets.UTF_8);
 
         String recipientName = extractNameFromEmail(email);

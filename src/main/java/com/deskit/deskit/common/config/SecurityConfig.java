@@ -85,7 +85,7 @@ public class SecurityConfig {
 
                         CorsConfiguration configuration = new CorsConfiguration();
 
-                        configuration.setAllowedOrigins(Collections.singletonList("https://ssg.deskit.o-r.kr"));
+                        configuration.setAllowedOrigins(Collections.singletonList("http://localhost:5173"));
                         configuration.setAllowedMethods(Collections.singletonList("*"));
                         configuration.setAllowCredentials(true);
                         configuration.setAllowedHeaders(Collections.singletonList("*"));
@@ -141,74 +141,72 @@ public class SecurityConfig {
         //경로별 인가 작업
         http
                 .authorizeHttpRequests((auth) -> auth
-                        .anyRequest().permitAll()
+                        .requestMatchers("/ws/info/**", "/ws/**").permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/favicon.ico",
+                                "/assets/**",
+                                "/css/**",
+                                "/js/**",
+                                "/images/**",
+                                "/*.js",
+                                "/*.css",
+                                "/*.png",
+                                "/*.jpg",
+                                "/*.svg"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/orders/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/addresses/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/seller/products/**")
+                        .hasAnyAuthority("ROLE_SELLER", "ROLE_SELLER_OWNER", "ROLE_SELLER_MANAGER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/products/**",
+                                "/api/setups/**",
+                                "/api/setup/**",
+                                "/api/products",
+                                "/api/setups",
+                                "/api/home/**",
+                                "/livechats/**",
+                                "/products/**",
+                                "/setups/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/chat",
+                                "/chat/**",
+                                "/reissue",
+                                "/api/home/**",
+                                "/api/broadcasts/**",
+                                "/api/categories",
+                                "/api/vods/**",
+                                "/api/webhook/**",
+                                "/api/admin/auth/**",
+                                "/api/invitations/validate",
+                                "/oauth/**",
+                                "/login",
+                                "/login/**",
+                                "/login/oauth2/**",
+                                "/ws/**",
+                                "/api/signup/**"
+                        ).permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/quit").hasAnyAuthority(
+                                "ROLE_MEMBER",
+                                "ROLE_SELLER_OWNER",
+                                "ROLE_SELLER_MANAGER"
+                        )
+                        .requestMatchers("/api/my/member-id").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/my/settings/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/my").hasAnyAuthority(
+                                "ROLE_MEMBER",
+                                "ROLE_SELLER",
+                                "ROLE_SELLER_OWNER",
+                                "ROLE_SELLER_MANAGER",
+                                "ROLE_ADMIN"
+                        )
                 );
-
-//        .requestMatchers("/ws/info/**", "/ws/**").permitAll()
-//                .requestMatchers(
-//                        "/",
-//                        "/index.html",
-//                        "/favicon.ico",
-//                        "/assets/**",
-//                        "/css/**",
-//                        "/js/**",
-//                        "/images/**",
-//                        "/*.js",
-//                        "/*.css",
-//                        "/*.png",
-//                        "/*.jpg",
-//                        "/*.svg"
-//                ).permitAll()
-//                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-//                .requestMatchers(HttpMethod.PATCH, "/api/orders/**").hasAuthority("ROLE_MEMBER")
-//                .requestMatchers("/api/addresses/**").hasAuthority("ROLE_MEMBER")
-//                .requestMatchers(HttpMethod.PATCH, "/api/seller/products/**")
-//                .hasAnyAuthority("ROLE_SELLER", "ROLE_SELLER_OWNER", "ROLE_SELLER_MANAGER")
-//                .requestMatchers(HttpMethod.GET,
-//                        "/api/products/**",
-//                        "/api/setups/**",
-//                        "/api/setup/**",
-//                        "/api/products",
-//                        "/api/setups",
-//                        "/api/home/**",
-//                        "/livechats/**",
-//                        "/products/**",
-//                        "/setups/**"
-//                ).permitAll()
-//                .requestMatchers(
-//                        "/",
-//                        "/chat",
-//                        "/chat/**",
-//                        "/reissue",
-//                        "/api/home/**",
-//                        "/api/broadcasts/**",
-//                        "/api/categories",
-//                        "/api/vods/**",
-//                        "/api/webhook/**",
-//                        "/api/admin/auth/**",
-//                        "/api/invitations/validate",
-//                        "/oauth/**",
-//                        "/login",
-//                        "/login/**",
-//                        "/login/oauth2/**",
-//                        "/ws/**",
-//                        "/api/signup/**"
-//                ).permitAll()
-//                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
-//                .requestMatchers("/api/quit").hasAnyAuthority(
-//                        "ROLE_MEMBER",
-//                        "ROLE_SELLER_OWNER",
-//                        "ROLE_SELLER_MANAGER"
-//                )
-//                .requestMatchers("/api/my/member-id").hasAuthority("ROLE_MEMBER")
-//                .requestMatchers("/api/my/settings/**").hasAuthority("ROLE_MEMBER")
-//                .requestMatchers("/api/my").hasAnyAuthority(
-//                        "ROLE_MEMBER",
-//                        "ROLE_SELLER",
-//                        "ROLE_SELLER_OWNER",
-//                        "ROLE_SELLER_MANAGER",
-//                        "ROLE_ADMIN"
-//                )
 
         //세션 설정 : STATELESS -> IF_REQUIRED
         http
