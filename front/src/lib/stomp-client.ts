@@ -17,6 +17,7 @@ export class SimpleStompClient {
   private socket: WebSocket | null = null
   private connected = false
   private connecting: Promise<void> | null = null
+  private connectTimer: number | null = null
   private subscriptions = new Map<string, Set<StompSubscription['callback']>>()
   private pendingSubs: StompSubscription[] = []
   private url: string
@@ -33,11 +34,28 @@ export class SimpleStompClient {
     return this.connecting !== null
   }
 
-  connect(): Promise<void> {
+  connect(timeoutMs = 5000): Promise<void> {
     if (this.connected) return Promise.resolve()
     if (this.connecting) return this.connecting
 
     this.connecting = new Promise((resolve, reject) => {
+      const finish = (error?: Error) => {
+        if (this.connectTimer !== null) {
+          window.clearTimeout(this.connectTimer)
+          this.connectTimer = null
+        }
+        if (error) {
+          this.connected = false
+          this.connecting = null
+          reject(error)
+        }
+      }
+
+      this.connectTimer = window.setTimeout(() => {
+        finish(new Error('WebSocket connection timeout'))
+        this.socket?.close()
+      }, timeoutMs)
+
       this.socket = new WebSocket(this.url)
       this.socket.onopen = () => {
         if (!this.socket) return
@@ -48,13 +66,21 @@ export class SimpleStompClient {
           }),
         )
       }
-      this.socket.onmessage = (event) => this.handleMessage(event.data, resolve)
+      this.socket.onmessage = (event) => this.handleMessage(event.data, () => {
+        if (this.connectTimer !== null) {
+          window.clearTimeout(this.connectTimer)
+          this.connectTimer = null
+        }
+        resolve()
+      })
       this.socket.onerror = () => {
-        this.connected = false
-        this.connecting = null
-        reject(new Error('WebSocket connection failed'))
+        finish(new Error('WebSocket connection failed'))
       }
       this.socket.onclose = () => {
+        if (!this.connected) {
+          finish(new Error('WebSocket closed before connect'))
+          return
+        }
         this.connected = false
         this.connecting = null
       }
@@ -82,6 +108,10 @@ export class SimpleStompClient {
 
   disconnect(): void {
     if (!this.socket) return
+    if (this.connectTimer !== null) {
+      window.clearTimeout(this.connectTimer)
+      this.connectTimer = null
+    }
     if (this.isSocketOpen()) {
       this.sendFrame('DISCONNECT', {})
     }

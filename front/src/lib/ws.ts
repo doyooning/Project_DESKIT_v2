@@ -4,16 +4,28 @@ const joinBasePath = (basePath: string, path: string): string => {
     return `${normalizedBase}${normalizedPath}`
 }
 
-export const resolveWsUrl = (apiBase?: string, path = '/ws'): string => {
-    if (apiBase) {
-        try {
-            const url = new URL(apiBase)
-            const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-            const basePath = url.pathname && url.pathname !== '/' ? url.pathname : ''
-            return `${protocol}//${url.host}${joinBasePath(basePath, path)}`
-        } catch (error) {
-            console.warn('[ws] invalid apiBase, fallback to location', error)
+const resolveBaseUrl = (apiBase?: string): URL | null => {
+    if (!apiBase) return null
+    try {
+        if (apiBase.startsWith('/')) {
+            if (typeof window !== 'undefined') {
+                return new URL(apiBase, window.location.origin)
+            }
+            return new URL(`http://localhost${apiBase}`)
         }
+        return new URL(apiBase)
+    } catch (error) {
+        console.warn('[ws] invalid apiBase, fallback to location', error)
+        return null
+    }
+}
+
+export const resolveWsUrl = (apiBase?: string, path = '/ws'): string => {
+    const baseUrl = resolveBaseUrl(apiBase)
+    if (baseUrl) {
+        const protocol = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+        const basePath = baseUrl.pathname && baseUrl.pathname !== '/' ? baseUrl.pathname : ''
+        return `${protocol}//${baseUrl.host}${joinBasePath(basePath, path)}`
     }
 
     if (typeof window !== 'undefined') {
@@ -25,15 +37,11 @@ export const resolveWsUrl = (apiBase?: string, path = '/ws'): string => {
 }
 
 export const resolveSockJsUrl = (apiBase?: string, path = '/ws-public'): string => {
-    if (apiBase) {
-        try {
-            const url = new URL(apiBase)
-            const protocol = url.protocol === 'https:' ? 'https:' : 'http:'
-            const basePath = url.pathname && url.pathname !== '/' ? url.pathname : ''
-            return `${protocol}//${url.host}${joinBasePath(basePath, path)}`
-        } catch (error) {
-            console.warn('[ws] invalid apiBase, fallback to location', error)
-        }
+    const baseUrl = resolveBaseUrl(apiBase)
+    if (baseUrl) {
+        const protocol = baseUrl.protocol === 'https:' ? 'https:' : 'http:'
+        const basePath = baseUrl.pathname && baseUrl.pathname !== '/' ? baseUrl.pathname : ''
+        return `${protocol}//${baseUrl.host}${joinBasePath(basePath, path)}`
     }
 
     if (typeof window !== 'undefined') {

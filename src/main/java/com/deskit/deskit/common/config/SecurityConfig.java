@@ -161,6 +161,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/addresses/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers(HttpMethod.PATCH, "/api/seller/products/**")
                         .hasAnyAuthority("ROLE_SELLER", "ROLE_SELLER_OWNER", "ROLE_SELLER_MANAGER")
+                        .requestMatchers("/api/chat/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/direct-chats/**").hasAnyAuthority("ROLE_MEMBER", "ROLE_ADMIN")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/products/**",
                                 "/api/setups/**",

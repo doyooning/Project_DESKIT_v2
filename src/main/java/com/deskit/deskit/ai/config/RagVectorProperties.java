@@ -15,5 +15,7 @@ public class RagVectorProperties {
     private String indexName = "chat-index";
     private String prefix = "doc:";
     private int topK = 4;
+    private String evaluationIndexName = "evaluation-index";
+    private String evaluationPrefix = "eval-doc:";
 
 }

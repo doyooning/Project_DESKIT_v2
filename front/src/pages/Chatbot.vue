@@ -47,6 +47,9 @@ const statusLabel = ref<string>('BOT_ACTIVE')
 const chatListRef = ref<HTMLDivElement | null>(null)
 const chatId = ref<number | null>(null)
 const isAdminChat = computed(() => statusLabel.value === 'ADMIN_ACTIVE')
+const isDirectChat = computed(
+  () => statusLabel.value === 'ADMIN_ACTIVE' || statusLabel.value === 'ESCALATED',
+)
 const isEscalated = computed(() => statusLabel.value === 'ESCALATED')
 const isClosed = computed(() => statusLabel.value === 'CLOSED')
 const statusLabelMap: Record<string, string> = {
@@ -185,22 +188,17 @@ const startStatusPolling = () => {
 
 const applyStatus = (status: string) => {
   statusLabel.value = status
-  if (status === 'BOT_ACTIVE') {
-    isLocked.value = false
-    return
-  }
+  isLocked.value = status === 'CLOSED'
   if (status === 'ADMIN_ACTIVE') {
-    isLocked.value = false
     stopStatusPolling()
     return
   }
-  isLocked.value = true
   if (status === 'ESCALATED') {
     startStatusPolling()
   } else {
     stopStatusPolling()
   }
-  if (status !== 'ADMIN_ACTIVE' && stompClient) {
+  if (status === 'BOT_ACTIVE' && stompClient) {
     stompClient.disconnect()
     stompClient = null
     connectedChatId = null
@@ -219,6 +217,8 @@ const connectDirectChat = async () => {
       console.error('direct chat reconnect failed', error)
       stompClient.disconnect()
       stompClient = null
+      connectedChatId = null
+      throw error
     }
   }
   if (stompClient) {
@@ -250,6 +250,10 @@ const connectDirectChat = async () => {
     })
   } catch (error) {
     console.error('direct chat connect failed', error)
+    stompClient.disconnect()
+    stompClient = null
+    connectedChatId = null
+    throw error
   }
 }
 
@@ -330,7 +334,7 @@ const hydrateDirectChat = async (status: string) => {
   if (status === 'ESCALATED' || status === 'ADMIN_ACTIVE' || status === 'CLOSED') {
     await loadDirectChatHistory()
   }
-  if (status === 'ADMIN_ACTIVE') {
+  if (status === 'ESCALATED' || status === 'ADMIN_ACTIVE') {
     await connectDirectChat()
   }
 }
@@ -365,7 +369,7 @@ const startNewInquiry = async () => {
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || isSending.value || isLocked.value) return
-  if (isAdminChat.value) {
+  if (isDirectChat.value) {
     isSending.value = true
     inputText.value = ''
     try {
@@ -413,7 +417,8 @@ const sendMessage = async () => {
     appendMessage('bot', data.answer ?? 'No response received.', data.sources)
     if (data.escalated) {
       applyStatus('ESCALATED')
-      isLocked.value = true
+      await ensureDirectChatId('ESCALATED')
+      await hydrateDirectChat('ESCALATED')
       appendMessage('system', '채팅이 관리자로 이관되었어요. 관리자가 곧 답변 드릴 예정이에요.')
     }
   } catch (error) {
@@ -483,7 +488,7 @@ onMounted(async () => {
       await loadChatHistory()
     }
   }
-  if (isAdminChat.value) {
+  if (isAdminChat.value || isEscalated.value) {
     await connectDirectChat()
   }
   document.addEventListener('visibilitychange', handleVisibilityChange)

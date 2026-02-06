@@ -4,7 +4,9 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -19,8 +21,14 @@ import java.util.Map;
 public class RagIngestService {
 
     private final RedisVectorStore vectorStore;
-    public RagIngestService(RedisVectorStore vectorStore) {
+    private final RedisVectorStore evalVectorStore;
+
+    public RagIngestService(
+            RedisVectorStore vectorStore,
+            @Qualifier("evalVectorStore") RedisVectorStore evalVectorStore
+    ) {
         this.vectorStore = vectorStore;
+        this.evalVectorStore = evalVectorStore;
     }
 
     public void ingest(MultipartFile file) {
@@ -52,6 +60,27 @@ public class RagIngestService {
                 .toList();
         vectorStore.add(enrichedDocs);
         log.info("📄 RAG 문서 업로드: {}", resource.getFilename());
+    }
+
+    public void ingestToEvaluationStore(Resource resource) {
+        DocumentReader reader = new TikaDocumentReader(resource);
+        List<Document> documents = reader.get();
+
+        String source = resource.getFilename();
+        List<Document> enrichedDocs = documents.stream()
+                .map(doc -> new Document(
+                        doc.getText(),
+                        Map.of(
+                                "source", source
+                        )
+                ))
+                .toList();
+        TokenTextSplitter splitter = new TokenTextSplitter();
+        List<Document> chunks = splitter.split(enrichedDocs);
+        evalVectorStore.add(chunks);
+        log.info("📄 RAG 평가 문서 생성 수: {}", documents.size());
+        log.info("📄 RAG 평가 문서 청크 수: {}", chunks.size());
+        log.info("📄 RAG 평가 문서 업로드: {}", resource.getFilename());
     }
 
 }

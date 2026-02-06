@@ -43,7 +43,7 @@ public class ChatController {
     private final MemberRepository memberRepository;
     private final AdminEscalationService adminEscalationService;
 
-    private static final String ESCALATION_TRIGGER = "\uad00\ub9ac\uc790 \uc5f0\uacb0";
+    private static final String ESCALATION_TRIGGER = "관리자 연결";
 
     // 채팅 페이지 접속
 //    @GetMapping("/chat")

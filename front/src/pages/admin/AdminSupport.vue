@@ -302,6 +302,8 @@ const connectDirectChat = async (chatId: number) => {
       console.error('direct chat reconnect failed', error)
       stompClient.disconnect()
       stompClient = null
+      connectedChatId = null
+      throw error
     }
   }
   if (stompClient) {
@@ -336,6 +338,10 @@ const connectDirectChat = async (chatId: number) => {
     })
   } catch (error) {
     console.error('direct chat connect failed', error)
+    stompClient.disconnect()
+    stompClient = null
+    connectedChatId = null
+    throw error
   }
 }
 
@@ -1292,7 +1298,6 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-
 
 
 

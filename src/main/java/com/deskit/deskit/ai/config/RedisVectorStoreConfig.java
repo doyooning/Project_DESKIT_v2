@@ -5,6 +5,7 @@ import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import redis.clients.jedis.JedisPooled;
 
 import java.net.URI;
@@ -33,7 +34,8 @@ public class RedisVectorStoreConfig {
     }
 
     @Bean
-    public RedisVectorStore redisVectorStore(
+    @Primary
+    public RedisVectorStore chatVectorStore(
             JedisPooled jedisPooled,
             EmbeddingModel embeddingModel,
             RagVectorProperties properties
@@ -41,6 +43,19 @@ public class RedisVectorStoreConfig {
         return RedisVectorStore.builder(jedisPooled, embeddingModel)
                 .indexName(properties.getIndexName())
                 .prefix(properties.getPrefix())
+                .initializeSchema(true)
+                .build();
+    }
+
+    @Bean
+    public RedisVectorStore evalVectorStore(
+            JedisPooled jedisPooled,
+            EmbeddingModel embeddingModel,
+            RagVectorProperties properties
+    ) {
+        return RedisVectorStore.builder(jedisPooled, embeddingModel)
+                .indexName(properties.getEvaluationIndexName())
+                .prefix(properties.getEvaluationPrefix())
                 .initializeSchema(true)
                 .build();
     }

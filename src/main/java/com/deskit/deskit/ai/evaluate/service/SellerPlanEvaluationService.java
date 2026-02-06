@@ -17,6 +17,7 @@ import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseOutputMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -25,6 +26,8 @@ import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
@@ -41,12 +44,14 @@ public class SellerPlanEvaluationService {
     @Value("${spring.ai.openai.chat.options.model}")
     private String chatModel;
 
+    @Qualifier("evalVectorStore")
     private final RedisVectorStore vectorStore;
     private final OpenAIClient openAIClient;
     private final RagVectorProperties ragVectorProperties;
     private final AiTools chatTools;
     private final AiEvalRepository aiEvalRepository;
     private final ObjectMapper objectMapper;
+    private final ResourceLoader resourceLoader;
 
     public AiEvaluation evaluateAndSave(SellerRegister registerEntity) {
         if (registerEntity == null) {
@@ -137,18 +142,60 @@ public class SellerPlanEvaluationService {
         String query = planText.isBlank() ? "판매자 사업계획서 심사 기준" : trimQuery(planText);
         SearchRequest searchRequest = SearchRequest.builder()
                 .query(query)
-                .topK(topK)
+                .topK(topK * 3)
                 .build();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
-        log.info("Document size: {}", documents.size());
-        return documents.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n"));
+        List<Document> filteredDocuments = documents.stream()
+                .filter(doc -> {
+                    String rawSource = String.valueOf(doc.getMetadata().getOrDefault("source", ""));
+                    String normalized = rawSource == null ? "" : rawSource.trim().toLowerCase();
+                    return normalized.equals("policy_v2.pdf") || normalized.endsWith("/policy_v2.pdf") || normalized.endsWith("\\policy_v2.pdf");
+                })
+                .limit(topK)
+                .toList();
+        if (filteredDocuments.isEmpty() && !documents.isEmpty()) {
+            String sources = documents.stream()
+                    .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("source", "")))
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            log.warn("No policy_v2.pdf documents found in search results. Available sources: {}", sources);
+        }
+        log.info("Document size (filtered): {}", filteredDocuments.size());
+        if (!filteredDocuments.isEmpty()) {
+            return filteredDocuments.stream()
+                    .map(Document::getText)
+                    .collect(Collectors.joining("\n\n"));
+        }
+
+        String fallback = loadPolicyFallback();
+        if (!fallback.isBlank()) {
+            log.info("Loaded policy context from classpath fallback.");
+        }
+        return fallback;
     }
 
     private String trimQuery(String planText) {
         int limit = 2000;
         return planText.length() > limit ? planText.substring(0, limit) : planText;
+    }
+
+    private String loadPolicyFallback() {
+        Resource resource = resourceLoader.getResource("classpath:rag/eval-seed/policy_v2.pdf");
+        if (!resource.exists()) {
+            log.warn("Fallback policy resource not found: {}", resource);
+            return "";
+        }
+        try {
+            TikaDocumentReader reader = new TikaDocumentReader(resource);
+            List<Document> documents = reader.get();
+            return documents.stream()
+                    .map(Document::getText)
+                    .collect(Collectors.joining("\n\n"))
+                    .trim();
+        } catch (Exception ex) {
+            log.warn("Failed to read fallback policy resource", ex);
+            return "";
+        }
     }
 
     private String nullSafe(String value) {
