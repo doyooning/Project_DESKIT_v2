@@ -5,6 +5,7 @@ import com.deskit.deskit.ai.chatbot.openai.repository.ChatRepository;
 import com.deskit.deskit.ai.chatbot.rag.dto.ChatResponse;
 import com.deskit.deskit.ai.chatbot.rag.service.ChatSaveService;
 import com.openai.client.OpenAIClient;
+import com.openai.core.http.StreamResponse;
 import com.openai.errors.OpenAIException;
 import com.openai.models.responses.EasyInputMessage;
 import com.openai.models.responses.Response;
@@ -12,6 +13,7 @@ import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseInputItem;
 import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseOutputMessage;
+import com.openai.models.responses.ResponseStreamEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,9 +26,12 @@ import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @Log4j2
@@ -91,6 +96,61 @@ public class OpenAIService {
         chatSaveService.saveChatMemory(String.valueOf(memberId), text, chatMemoryRepository);
 
         return new ChatResponse(answer, List.of(), false);
+    }
+
+    public Flux<String> generateStream(Long memberId, String text) {
+        ChatInfo chatInfo = conversationService.getOrCreateActiveConversation(memberId);
+
+        List<Message> messages = new ArrayList<>();
+
+        messages.add(new SystemMessage(
+                """
+                        당신은 고객지원을 돕는 AI 상담 챗봇입니다.
+                        
+                        고객이 문의를 자세히 설명하도록 "~에 대해 알려줘" 같은 형식으로 유도해 주세요.
+                        
+                        질문 길이가 너무 짧으면(6글자 이하) 아래처럼 안내해 주세요.
+                        - 조금 더 구체적으로 상황을 설명해 주세요.
+                        - 질문이 이해되지 않으면 다시 한 번 설명해 주세요.
+                        
+                        
+                        """
+        ));
+
+        messages.add(new UserMessage(text));
+
+        ResponseCreateParams params = ResponseCreateParams.builder()
+                .model(chatModel)
+                .inputOfResponse(buildResponseInput(messages))
+                .temperature(0.7)
+                .build();
+
+        StringBuilder responseBuffer = new StringBuilder();
+        AtomicBoolean failed = new AtomicBoolean(false);
+
+        return Flux.using(
+                        () -> openAIClient.responses().createStreaming(params),
+                        stream -> Flux.fromStream(stream.stream())
+                                .filter(ResponseStreamEvent::isOutputTextDelta)
+                                .map(event -> event.asOutputTextDelta().delta())
+                                .filter(delta -> delta != null && !delta.isEmpty())
+                                .doOnNext(responseBuffer::append),
+                        StreamResponse::close
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(error -> {
+                    failed.set(true);
+                    log.error("OpenAI stream error", error);
+                })
+                .onErrorResume(error -> Flux.just(OPENAI_ERROR_MESSAGE))
+                .doOnComplete(() -> {
+                    if (failed.get()) {
+                        return;
+                    }
+                    String answer = responseBuffer.toString();
+                    chatSaveService.saveChat(chatInfo.getChatId(), text, answer);
+                    chatSaveService.saveChatMemory(String.valueOf(memberId), text, chatMemoryRepository);
+                });
     }
 
 //    public Flux<String> generateStream(String text) {

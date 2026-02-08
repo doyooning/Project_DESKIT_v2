@@ -17,13 +17,13 @@ public class ChatRoutingService {
 
     private final RedisVectorStore vectorStore;
 
-    @Value("${rag.routing.top-k:1}")
+    @Value("${rag.routing.top-k}")
     private int routingTopK;
 
-    @Value("${rag.routing.similarity-threshold:0.78}")
+    @Value("${rag.routing.similarity-threshold}")
     private double similarityThreshold;
 
-    @Value("${rag.routing.min-length:6}")
+    @Value("${rag.routing.min-length}")
     private int minLenForRouting;
 
     public ChatRoutingService(RedisVectorStore vectorStore) {
@@ -49,6 +49,7 @@ public class ChatRoutingService {
                 .topK(routingTopK)
                 .similarityThreshold(similarityThreshold)
                 .build();
+        log.info(request);
 
         List<Document> documents = vectorStore.similaritySearch(request);
 

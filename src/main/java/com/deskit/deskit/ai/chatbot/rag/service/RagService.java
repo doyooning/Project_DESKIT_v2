@@ -6,6 +6,7 @@ import com.deskit.deskit.ai.chatbot.openai.service.OpenAIService;
 import com.deskit.deskit.ai.chatbot.openai.service.ConversationService;
 import com.deskit.deskit.ai.chatbot.rag.dto.ChatResponse;
 import com.openai.client.OpenAIClient;
+import com.openai.core.http.StreamResponse;
 import com.openai.errors.OpenAIException;
 import com.openai.models.responses.EasyInputMessage;
 import com.openai.models.responses.Response;
@@ -13,6 +14,7 @@ import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseInputItem;
 import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseOutputMessage;
+import com.openai.models.responses.ResponseStreamEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,10 +27,13 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Log4j2
@@ -119,6 +124,80 @@ public class RagService {
                 .toList();
 
         return new ChatResponse(answer, sources, escalated);
+    }
+
+    public Flux<String> chatStream(Long memberId, String question, int topK) {
+        ChatInfo chatInfo = conversationService.getOrCreateActiveConversation(memberId);
+
+        String normalized = normalize(question);
+        if (normalized != null && normalized.equals(ESCALATION_TRIGGER)) {
+            log.info("Escalation triggered");
+            ChatResponse response = adminEscalationService.escalate(normalized, chatInfo.getChatId(), String.valueOf(memberId));
+            return Flux.just(response.getAnswer());
+        }
+
+        int candidates = topK > 0 ? topK : properties.getTopK();
+        log.info("[RAG] chatStream() called. question={}", normalized);
+
+        if (normalized == null || normalized.isBlank()) {
+            return Flux.just(NO_CONTEXT_MESSAGE);
+        }
+
+        SearchRequest searchRequest = SearchRequest.builder()
+                .query(normalized)
+                .topK(candidates)
+                .build();
+
+        List<Document> documents = vectorStore.similaritySearch(searchRequest);
+
+        log.info("[RAG] similaritySearch result size={}", documents.size());
+
+        if (documents.isEmpty()) {
+            return openAIService.generateStream(memberId, question);
+        }
+
+        String context = buildContext(documents);
+        if (context.isBlank()) {
+            return openAIService.generateStream(memberId, question);
+        }
+
+        List<Message> messages = buildMessages(context, normalized);
+
+        ResponseCreateParams params = ResponseCreateParams.builder()
+                .model(chatModel)
+                .inputOfResponse(buildResponseInput(messages))
+                .temperature(TEMPERATURE)
+                .build();
+
+        StringBuilder responseBuffer = new StringBuilder();
+        AtomicBoolean failed = new AtomicBoolean(false);
+
+        return Flux.using(
+                        () -> openAIClient.responses().createStreaming(params),
+                        stream -> Flux.fromStream(stream.stream())
+                                .filter(ResponseStreamEvent::isOutputTextDelta)
+                                .map(event -> event.asOutputTextDelta().delta())
+                                .filter(delta -> delta != null && !delta.isEmpty())
+                                .doOnNext(responseBuffer::append),
+                        StreamResponse::close
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(error -> {
+                    failed.set(true);
+                    log.error("RAG OpenAI stream error", error);
+                })
+                .onErrorResume(error -> Flux.just("현재 상담 시스템에 문제가 발생했습니다. 잠시 후 다시 시도해주세요."))
+                .doOnComplete(() -> {
+                    if (failed.get()) {
+                        return;
+                    }
+                    String answer = responseBuffer.toString();
+                    if (answer.isBlank()) {
+                        answer = NO_CONTEXT_MESSAGE;
+                    }
+                    chatSaveService.saveChat(chatInfo.getChatId(), question, answer);
+                    chatSaveService.saveChatMemory(String.valueOf(memberId), question, chatMemoryRepository);
+                });
     }
 
     private String buildContext(List<Document> documents) {

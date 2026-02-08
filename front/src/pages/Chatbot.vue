@@ -102,6 +102,7 @@ const renderMarkdown = (content: string) => {
   return DOMPurify.sanitize(parsed)
 }
 
+
 const appendMessage = (role: ChatRole, content: string, sources?: string[]) => {
   messages.value.push({
     id: `${Date.now()}-${messages.value.length}`,
@@ -348,7 +349,7 @@ const startNewInquiry = async () => {
       method: 'POST',
     })
     if (!response.ok) {
-      appendMessage('system', '새 문의를 시작할 수 없습니다. 잠시 후 다시 시도해주세요.')
+      appendMessage('system', '문의 시작할 수 없습니다. 잠시 후 다시 시도해주세요.')
       return
     }
     const data = (await response.json()) as { chatId?: number; status?: string }
@@ -360,7 +361,7 @@ const startNewInquiry = async () => {
     applyStatus(data.status ?? 'BOT_ACTIVE')
   } catch (error) {
     console.error('new inquiry start failed', error)
-    appendMessage('system', '새 문의를 시작할 수 없습니다. 잠시 후 다시 시도해주세요.')
+    appendMessage('system', '문의 시작할 수 없습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     isSending.value = false
   }
@@ -413,6 +414,7 @@ const sendMessage = async () => {
       appendMessage('system', '메시지 전송에 실패했어요. 다시 시도해 주세요.')
       return
     }
+
     const data = (await response.json()) as ChatResponse
     appendMessage('bot', data.answer ?? 'No response received.', data.sources)
     if (data.escalated) {
@@ -854,3 +856,8 @@ const handleVisibilityChange = () => {
   }
 }
 </style>
+
+
+
+
+

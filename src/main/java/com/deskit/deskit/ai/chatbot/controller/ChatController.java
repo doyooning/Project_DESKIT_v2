@@ -24,6 +24,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ public class ChatController {
 
     private static final String ESCALATION_TRIGGER = "관리자 연결";
 
-    // 채팅 페이지 접속
+    // 챗봇 페이지 이동
 //    @GetMapping("/chat")
 //    public String chatPage() {
 //        return "chat";
@@ -66,7 +67,7 @@ public class ChatController {
             return null;
         }
 
-        // 현재 진행 중인 대화 조회 or 생성
+        // 현재 진행 중인 상태 조회 or 생성
         ChatInfo chatInfo = conversationService.getOrCreateActiveConversation(memberId);
         if (chatInfo.getStatus() != com.deskit.deskit.ai.chatbot.openai.entity.ConversationStatus.BOT_ACTIVE) {
             return ChatResponse.builder()
@@ -81,16 +82,16 @@ public class ChatController {
         }
 
         RouteDecision decision = chatRoutingService.decide(question);
-        log.info("route={} score={} reason={} q={}",
-                decision.route(), decision.score(), decision.reason(), question);
+        log.info("route={} score={} reason={} q={}"
+                , decision.route(), decision.score(), decision.reason(), question);
 
 
         switch (decision.route()) {
-            // RAG로 판단
+            // RAG로 상담
             case RAG -> {
                 return ragService.chat(memberId, question, 4);
             }
-            // LLM 채팅으로 판단
+            // LLM 채팅으로 상담
             case GENERAL -> {
                 return openAIService.generate(memberId, request.getQuestion());
             }
@@ -197,4 +198,3 @@ public class ChatController {
     }
 
 }
-
