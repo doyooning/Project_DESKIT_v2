@@ -31,8 +31,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -84,6 +86,7 @@ public class RagService {
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
 
         log.info("[RAG] similaritySearch result size={}", documents.size());
+        logReferencedChunks(normalized, documents);
 
         if (documents.isEmpty()) {
             return openAIService.generate(memberId, question);
@@ -120,7 +123,7 @@ public class RagService {
         chatSaveService.saveChatMemory(String.valueOf(memberId), question, chatMemoryRepository);
 
         List<String> sources = documents.stream()
-                .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("source", "")))
+                .map(doc -> readMetadata(doc.getMetadata(), "source", "meta_source", "metadata.source"))
                 .toList();
 
         return new ChatResponse(answer, sources, escalated);
@@ -151,6 +154,7 @@ public class RagService {
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
 
         log.info("[RAG] similaritySearch result size={}", documents.size());
+        logReferencedChunks(normalized, documents);
 
         if (documents.isEmpty()) {
             return openAIService.generateStream(memberId, question);
@@ -292,6 +296,63 @@ public class RagService {
             }
         }
         return text.toString();
+    }
+
+    private void logReferencedChunks(String question, List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            log.info("[RAG] referenced chunks: none. question={}", question);
+            return;
+        }
+
+        int referencedCount = Math.min(3, documents.size());
+        log.info("[RAG] referenced chunks count={} retrieved={} question={}",
+                referencedCount, documents.size(), question);
+
+        for (int i = 0; i < referencedCount; i++) {
+            Document document = documents.get(i);
+            Map<String, Object> metadata = document.getMetadata();
+
+            String source = readMetadata(metadata, "source", "meta_source", "metadata.source");
+            String chunkIndex = readMetadata(metadata, "chunk_index", "meta_chunk_index", "metadata.chunk_index");
+            String preview = buildPreview(document.getText());
+
+            log.info("[RAG] referenced_chunk[{}] source={} chunk_index={} preview={} metadata={}",
+                    i,
+                    source,
+                    chunkIndex,
+                    preview,
+                    metadata
+            );
+        }
+    }
+
+    private String readMetadata(Map<String, Object> metadata, String... keys) {
+        if (metadata == null || metadata.isEmpty()) {
+            return "";
+        }
+        for (String key : keys) {
+            Object value = metadata.get(key);
+            if (value != null) {
+                String text = Objects.toString(value, "").trim();
+                if (!text.isEmpty()) {
+                    return text;
+                }
+            }
+        }
+        log.debug("[RAG] metadata keys={} requested={}", metadata.keySet(), Arrays.toString(keys));
+        return "";
+    }
+
+    private String buildPreview(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        int maxLength = 180;
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "...";
     }
 
     public void ingest(List<Document> documents) {

@@ -2,6 +2,7 @@ package com.deskit.deskit.ai.config;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,6 +44,10 @@ public class RedisVectorStoreConfig {
         return RedisVectorStore.builder(jedisPooled, embeddingModel)
                 .indexName(properties.getIndexName())
                 .prefix(properties.getPrefix())
+                .metadataFields(
+                        MetadataField.text("source"),
+                        MetadataField.numeric("chunk_index")
+                )
                 .initializeSchema(true)
                 .build();
     }
@@ -56,6 +61,10 @@ public class RedisVectorStoreConfig {
         return RedisVectorStore.builder(jedisPooled, embeddingModel)
                 .indexName(properties.getEvaluationIndexName())
                 .prefix(properties.getEvaluationPrefix())
+                .metadataFields(
+                        MetadataField.text("source"),
+                        MetadataField.numeric("chunk_index")
+                )
                 .initializeSchema(true)
                 .build();
     }
