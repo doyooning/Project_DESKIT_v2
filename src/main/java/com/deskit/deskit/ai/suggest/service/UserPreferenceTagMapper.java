@@ -38,69 +38,69 @@ public class UserPreferenceTagMapper {
     char lifestyle = mbti.charAt(3);
 
     if (energy == 'I') {
-      tags.add(TagCode.MOOD, "차분한", "집중");
-      tags.add(TagCode.SPACE, "서재");
+      tags.add(TagCode.SPACE, "서재", "study");
+      tags.add(TagCode.MOOD, "집중", "차분한", "focus", "calm");
     } else if (energy == 'E') {
-      tags.add(TagCode.MOOD, "활기", "컬러풀");
-      tags.add(TagCode.SITUATION, "취미");
+      tags.add(TagCode.SPACE, "거실", "living");
+      tags.add(TagCode.MOOD, "감성", "활기", "energetic", "sensible");
     }
 
     if (info == 'N') {
+      tags.add(TagCode.TONE, "우드", "파스텔", "wood", "pastel");
       tags.add(TagCode.MOOD, "감성", "창의");
-      tags.add(TagCode.TONE, "파스텔");
     } else if (info == 'S') {
-      tags.add(TagCode.MOOD, "실용", "깔끔한");
-      tags.add(TagCode.TONE, "모던");
+      tags.add(TagCode.TONE, "모던", "미니멀", "modern", "minimal");
+      tags.add(TagCode.MOOD, "깔끔", "실용");
     }
 
     if (decision == 'T') {
-      tags.add(TagCode.MOOD, "집중");
-      tags.add(TagCode.TONE, "메탈");
+      tags.add(TagCode.MOOD, "집중", "깔끔", "focus");
+      tags.add(TagCode.SITUATION, "공부", "업무", "study", "work");
     } else if (decision == 'F') {
-      tags.add(TagCode.MOOD, "따뜻한");
-      tags.add(TagCode.TONE, "우드");
+      tags.add(TagCode.MOOD, "감성", "따뜻", "relaxed");
+      tags.add(TagCode.SITUATION, "취미", "hobby");
     }
 
     if (lifestyle == 'J') {
-      tags.add(TagCode.MOOD, "깔끔한");
-      tags.add(TagCode.TONE, "미니멀");
+      tags.add(TagCode.TONE, "미니멀", "minimal");
+      tags.add(TagCode.SITUATION, "재택근무", "업무", "remote", "work");
     } else if (lifestyle == 'P') {
-      tags.add(TagCode.MOOD, "자유로운");
-      tags.add(TagCode.TONE, "컬러풀");
+      tags.add(TagCode.SITUATION, "게임", "취미", "gaming", "hobby");
+      tags.add(TagCode.SPACE, "침실", "bedroom");
     }
   }
 
   private void applyJobTraits(JobCategory jobCategory, UserPreferenceTags tags) {
     switch (jobCategory) {
       case CREATIVE_TYPE -> {
-        tags.add(TagCode.MOOD, "감성", "컬러풀");
-        tags.add(TagCode.TONE, "우드", "파스텔");
-        tags.add(TagCode.SITUATION, "취미", "영상편집");
-        tags.add(TagCode.SPACE, "서재");
+        tags.add(TagCode.TONE, "우드", "파스텔", "wood", "pastel");
+        tags.add(TagCode.MOOD, "감성", "창의", "sensible", "creative");
+        tags.add(TagCode.SITUATION, "취미", "게임", "hobby", "gaming");
+        tags.add(TagCode.SPACE, "거실", "서재", "living", "study");
       }
       case FLEXIBLE_TYPE -> {
-        tags.add(TagCode.MOOD, "따뜻한");
-        tags.add(TagCode.TONE, "우드");
-        tags.add(TagCode.SITUATION, "재택근무");
-        tags.add(TagCode.SPACE, "홈카페");
+        tags.add(TagCode.TONE, "우드", "미니멀", "wood", "minimal");
+        tags.add(TagCode.MOOD, "따뜻", "차분", "relaxed", "calm");
+        tags.add(TagCode.SITUATION, "재택근무", "업무", "remote", "work");
+        tags.add(TagCode.SPACE, "침실", "서재", "bedroom", "study");
       }
       case EDU_RES_TYPE -> {
-        tags.add(TagCode.MOOD, "집중", "차분한");
-        tags.add(TagCode.TONE, "미니멀");
-        tags.add(TagCode.SITUATION, "공부", "연구");
-        tags.add(TagCode.SPACE, "서재");
+        tags.add(TagCode.TONE, "미니멀", "모던", "minimal", "modern");
+        tags.add(TagCode.MOOD, "집중", "차분", "focus", "calm");
+        tags.add(TagCode.SITUATION, "공부", "연구", "study", "research");
+        tags.add(TagCode.SPACE, "서재", "study");
       }
       case MED_PRO_TYPE -> {
-        tags.add(TagCode.MOOD, "깔끔한", "차분한");
-        tags.add(TagCode.TONE, "화이트");
-        tags.add(TagCode.SITUATION, "업무");
-        tags.add(TagCode.SPACE, "오피스");
+        tags.add(TagCode.TONE, "미니멀", "모던", "minimal", "modern", "화이트", "white");
+        tags.add(TagCode.MOOD, "깔끔", "차분", "clean", "calm");
+        tags.add(TagCode.SITUATION, "업무", "공부", "work", "study");
+        tags.add(TagCode.SPACE, "서재", "오피스", "study", "office");
       }
       case ADMIN_PLAN_TYPE -> {
-        tags.add(TagCode.MOOD, "깔끔한", "집중");
-        tags.add(TagCode.TONE, "모던");
-        tags.add(TagCode.SITUATION, "오피스", "재택근무");
-        tags.add(TagCode.SPACE, "오피스");
+        tags.add(TagCode.TONE, "모던", "미니멀", "modern", "minimal");
+        tags.add(TagCode.MOOD, "집중", "깔끔", "focus", "clean");
+        tags.add(TagCode.SITUATION, "업무", "재택근무", "work", "remote");
+        tags.add(TagCode.SPACE, "서재", "오피스", "study", "office");
       }
       default -> {
         // NO-OP
@@ -118,17 +118,27 @@ public class UserPreferenceTagMapper {
       LinkedHashSet<String> bucket = byCode.computeIfAbsent(code, ignored -> new LinkedHashSet<>());
       for (String value : values) {
         if (value != null && !value.isBlank()) {
-          bucket.add(value.trim());
+          bucket.add(normalize(value));
         }
       }
     }
 
-    public boolean contains(TagCode code, String value) {
-      if (code == null || value == null || value.isBlank()) {
+    public boolean matches(TagCode code, String actualTagName) {
+      if (code == null || actualTagName == null || actualTagName.isBlank()) {
         return false;
       }
       Set<String> bucket = byCode.get(code);
-      return bucket != null && bucket.contains(value);
+      if (bucket == null || bucket.isEmpty()) {
+        return false;
+      }
+
+      String normalizedActual = normalize(actualTagName);
+      for (String keyword : bucket) {
+        if (normalizedActual.contains(keyword)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     public List<String> allTagNames() {
@@ -141,6 +151,10 @@ public class UserPreferenceTagMapper {
 
     public boolean isEmpty() {
       return byCode.values().stream().allMatch(Set::isEmpty);
+    }
+
+    private static String normalize(String value) {
+      return value.trim().toLowerCase().replace(" ", "");
     }
   }
 }

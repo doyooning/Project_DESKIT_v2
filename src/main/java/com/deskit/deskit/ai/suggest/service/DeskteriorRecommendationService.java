@@ -57,20 +57,27 @@ public class DeskteriorRecommendationService {
     if (mbti == null || mbti == MBTI.NONE || jobCategory == null || jobCategory == JobCategory.NONE) {
       return Collections.emptyList();
     }
+    int profileSeed = (mbti.name() + "|" + jobCategory.name()).hashCode();
 
     UserPreferenceTags preferenceTags = preferenceTagMapper.map(mbti, jobCategory);
     if (preferenceTags.isEmpty()) {
       return Collections.emptyList();
     }
 
-    List<String> tagNames = preferenceTags.allTagNames();
-    if (tagNames.isEmpty()) {
+    if (preferenceTags.allTagNames().isEmpty()) {
+      return fallbackProducts(limit, profileSeed);
+    }
+
+    List<Long> candidateProductIds = productService.getProducts().stream()
+        .map(ProductResponse::getProductId)
+        .toList();
+    if (candidateProductIds.isEmpty()) {
       return Collections.emptyList();
     }
 
-    List<ProductTagRow> rows = productTagRepository.findActiveTagsByTagNames(tagNames);
+    List<ProductTagRow> rows = productTagRepository.findActiveTagsByProductIds(candidateProductIds);
     if (rows.isEmpty()) {
-      return Collections.emptyList();
+      return fallbackProducts(limit, profileSeed);
     }
 
     Map<Long, Integer> scores = new HashMap<>();
@@ -78,7 +85,7 @@ public class DeskteriorRecommendationService {
       if (row == null || row.getProductId() == null || row.getTagCode() == null) {
         continue;
       }
-      if (!preferenceTags.contains(row.getTagCode(), row.getTagName())) {
+      if (!preferenceTags.matches(row.getTagCode(), row.getTagName())) {
         continue;
       }
       int weight = weightFor(row.getTagCode());
@@ -86,18 +93,18 @@ public class DeskteriorRecommendationService {
     }
 
     if (scores.isEmpty()) {
-      return Collections.emptyList();
+      return fallbackProducts(limit, profileSeed);
     }
 
     List<Long> rankedIds = scores.entrySet().stream()
         .sorted(Comparator.<Map.Entry<Long, Integer>>comparingInt(Map.Entry::getValue).reversed()
-            .thenComparing(Map.Entry::getKey))
+            .thenComparing(entry -> tieBreaker(entry.getKey(), profileSeed)))
         .limit(limit)
         .map(Map.Entry::getKey)
         .toList();
 
     if (rankedIds.isEmpty()) {
-      return Collections.emptyList();
+      return fallbackProducts(limit, profileSeed);
     }
 
     List<ProductResponse> responses = productService.getProductsByIds(rankedIds);
@@ -116,7 +123,7 @@ public class DeskteriorRecommendationService {
         ordered.add(response);
       }
     }
-    return ordered;
+    return ordered.isEmpty() ? fallbackProducts(limit, profileSeed) : ordered;
   }
 
   private int weightFor(TagCode code) {
@@ -128,5 +135,24 @@ public class DeskteriorRecommendationService {
       case SITUATION -> 2;
       case SPACE, TONE -> 1;
     };
+  }
+
+  private List<ProductResponse> fallbackProducts(int limit, int profileSeed) {
+    int safeLimit = Math.max(1, limit);
+    List<ProductResponse> products = productService.getProducts();
+    if (products.isEmpty()) {
+      return Collections.emptyList();
+    }
+    return products.stream()
+        .sorted(Comparator.comparingInt(product -> tieBreaker(product.getProductId(), profileSeed)))
+        .limit(safeLimit)
+        .toList();
+  }
+
+  private int tieBreaker(Long productId, int profileSeed) {
+    if (productId == null) {
+      return Integer.MAX_VALUE;
+    }
+    return Integer.rotateLeft(productId.hashCode(), 5) ^ profileSeed;
   }
 }

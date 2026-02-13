@@ -202,6 +202,7 @@ public class SecurityConfig {
                         )
                         .requestMatchers("/api/my/member-id").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/my/settings/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/recommendations/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/seller/**").hasAnyAuthority(
                                 "ROLE_SELLER_OWNER",
                                 "ROLE_SELLER_MANAGER")
