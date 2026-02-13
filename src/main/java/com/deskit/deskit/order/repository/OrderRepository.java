@@ -3,10 +3,12 @@ package com.deskit.deskit.order.repository;
 import com.deskit.deskit.order.entity.Order;
 import com.deskit.deskit.order.enums.OrderStatus;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -43,6 +45,56 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
   Optional<Order> findByOrderNumberForUpdate(@Param("orderNumber") String orderNumber);
 
   Optional<Order> findByIdAndDeletedAtIsNull(Long id);
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      update Order o
+      set o.status = com.deskit.deskit.order.enums.OrderStatus.CANCELLED,
+          o.cancelReason = :reason,
+          o.cancelledAt = :now
+      where o.id = :orderId
+        and o.memberId = :memberId
+        and o.deletedAt is null
+        and o.status = com.deskit.deskit.order.enums.OrderStatus.CREATED
+      """)
+  int cancelCreatedOrder(
+          @Param("orderId") Long orderId,
+          @Param("memberId") Long memberId,
+          @Param("reason") String reason,
+          @Param("now") LocalDateTime now
+  );
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      update Order o
+      set o.status = com.deskit.deskit.order.enums.OrderStatus.REFUND_REQUESTED,
+          o.cancelReason = :reason
+      where o.id = :orderId
+        and o.memberId = :memberId
+        and o.deletedAt is null
+        and o.status = com.deskit.deskit.order.enums.OrderStatus.PAID
+      """)
+  int requestRefundForPaidOrder(
+          @Param("orderId") Long orderId,
+          @Param("memberId") Long memberId,
+          @Param("reason") String reason
+  );
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      update Order o
+      set o.status = com.deskit.deskit.order.enums.OrderStatus.REFUNDED,
+          o.refundedAt = :now
+      where o.id = :orderId
+        and o.memberId = :memberId
+        and o.deletedAt is null
+        and o.status = com.deskit.deskit.order.enums.OrderStatus.REFUND_REQUESTED
+      """)
+  int approveRefundRequest(
+          @Param("orderId") Long orderId,
+          @Param("memberId") Long memberId,
+          @Param("now") LocalDateTime now
+  );
 
   @Query(
     value = """

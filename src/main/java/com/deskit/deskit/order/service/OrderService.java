@@ -33,10 +33,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -52,7 +49,6 @@ public class OrderService {
   private final TossPaymentService tossPaymentService;
   private final BroadcastService broadcastService;
   private final AddressService addressService;
-  private final PlatformTransactionManager transactionManager;
 
   public CreateOrderResponse createOrder(Long memberId, CreateOrderRequest request) {
     if (memberId == null) {
@@ -221,44 +217,73 @@ public class OrderService {
     if (request == null || request.reason() == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason required");
     }
+    String reason = request.reason().trim();
+    if (reason.isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason required");
+    }
 
-    Order order = orderRepository.findByIdForUpdate(orderId)
+    Order order = orderRepository.findByIdAndDeletedAtIsNull(orderId)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "order not found"));
     if (!order.getMemberId().equals(memberId)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "forbidden");
     }
 
-    try {
-      order.requestCancel(request.reason());
-    } catch (IllegalStateException ex) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+    if (isFinalizedCancelState(order.getStatus())) {
+      return new OrderCancelResponse(order.getId(), order.getStatus());
     }
 
-    if (order.getStatus() == OrderStatus.CANCEL_REQUESTED) {
-      order.approveCancel();
-    }
-
-    if (order.getStatus() == OrderStatus.REFUND_REQUESTED) {
-      persistRefundRequested(order);
-      try {
-        tossPaymentService.cancelPayment(order, request.reason());
-      } catch (ResponseStatusException ex) {
-        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "toss cancel failed", ex);
-      } catch (RuntimeException ex) {
-        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "toss cancel failed", ex);
+    if (order.getStatus() == OrderStatus.CREATED) {
+      int updated = orderRepository.cancelCreatedOrder(orderId, memberId, reason, LocalDateTime.now());
+      Order latest = loadOwnedOrder(memberId, orderId);
+      if (updated == 0 && !isFinalizedCancelState(latest.getStatus())) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "cancel state changed");
       }
-      order.approveRefund();
-      updateBroadcastSalesAfterRefund(order);
+      return new OrderCancelResponse(latest.getId(), latest.getStatus());
     }
 
-    orderRepository.save(order);
-    return new OrderCancelResponse(order.getId(), order.getStatus());
+    if (order.getStatus() == OrderStatus.PAID) {
+      int updated = orderRepository.requestRefundForPaidOrder(orderId, memberId, reason);
+      Order latest = loadOwnedOrder(memberId, orderId);
+      if (updated == 0 && latest.getStatus() != OrderStatus.REFUND_REQUESTED && latest.getStatus() != OrderStatus.REFUNDED) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "cancel state changed");
+      }
+
+      if (latest.getStatus() == OrderStatus.REFUNDED) {
+        return new OrderCancelResponse(latest.getId(), latest.getStatus());
+      }
+      order = latest;
+    } else if (order.getStatus() != OrderStatus.REFUND_REQUESTED) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid status for cancel request");
+    }
+
+    try {
+      tossPaymentService.cancelPayment(order, reason);
+    } catch (ResponseStatusException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "toss cancel failed", ex);
+    } catch (RuntimeException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "toss cancel failed", ex);
+    }
+
+    orderRepository.approveRefundRequest(orderId, memberId, LocalDateTime.now());
+    Order afterRefund = loadOwnedOrder(memberId, orderId);
+    if (afterRefund.getStatus() == OrderStatus.REFUNDED) {
+      updateBroadcastSalesAfterRefund(afterRefund);
+    }
+    return new OrderCancelResponse(afterRefund.getId(), afterRefund.getStatus());
   }
 
-  private void persistRefundRequested(Order order) {
-    TransactionTemplate template = new TransactionTemplate(transactionManager);
-    template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    template.executeWithoutResult(status -> orderRepository.save(order));
+  private Order loadOwnedOrder(Long memberId, Long orderId) {
+    Order order = orderRepository.findByIdAndDeletedAtIsNull(orderId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "order not found"));
+    if (!order.getMemberId().equals(memberId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "forbidden");
+    }
+    return order;
+  }
+
+  private boolean isFinalizedCancelState(OrderStatus status) {
+    return status == OrderStatus.CANCELLED
+            || status == OrderStatus.REFUNDED;
   }
 
   private void updateBroadcastSalesAfterRefund(Order order) {
