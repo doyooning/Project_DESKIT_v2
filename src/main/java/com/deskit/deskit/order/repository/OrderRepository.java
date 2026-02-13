@@ -34,7 +34,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
    * - 사용 예:
    *   List<Order> orders = orderRepository.findByMemberIdOrderByCreatedAtDesc(memberId);
    */
-  List<Order> findByMemberIdOrderByCreatedAtDesc(Long memberId);
+  List<Order> findByMemberIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long memberId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select o from Order o where o.id = :id")
@@ -91,6 +91,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         and o.status = com.deskit.deskit.order.enums.OrderStatus.REFUND_REQUESTED
       """)
   int approveRefundRequest(
+          @Param("orderId") Long orderId,
+          @Param("memberId") Long memberId,
+          @Param("now") LocalDateTime now
+  );
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      update Order o
+      set o.deletedAt = :now
+      where o.id = :orderId
+        and o.memberId = :memberId
+        and o.deletedAt is null
+        and o.status = com.deskit.deskit.order.enums.OrderStatus.CREATED
+      """)
+  int markCreatedOrderDeleted(
           @Param("orderId") Long orderId,
           @Param("memberId") Long memberId,
           @Param("now") LocalDateTime now

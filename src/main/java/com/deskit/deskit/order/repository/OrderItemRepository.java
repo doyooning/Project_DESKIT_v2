@@ -2,8 +2,10 @@ package com.deskit.deskit.order.repository;
 
 import com.deskit.deskit.order.entity.OrderItem;
 import com.deskit.deskit.order.enums.OrderStatus;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -41,4 +43,13 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
       """)
   boolean existsPaidOrderByProductId(@Param("productId") Long productId,
                                      @Param("statuses") List<OrderStatus> statuses);
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("""
+      update OrderItem oi
+      set oi.deletedAt = :now
+      where oi.order.id = :orderId
+        and oi.deletedAt is null
+      """)
+  int markDeletedByOrderId(@Param("orderId") Long orderId, @Param("now") LocalDateTime now);
 }

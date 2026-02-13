@@ -13,7 +13,7 @@ import {
   type PaymentMethod,
   updateCheckoutItemsPricing,
 } from '../lib/checkout/checkout-storage'
-import { createOrder } from '../api/orders'
+import { abandonCreatedOrder, createOrder } from '../api/orders'
 import { getMyAddresses } from '../api/addresses'
 import type { AddressResponse } from '../api/types/addresses'
 import { getAuthUser } from '../lib/auth'
@@ -532,6 +532,7 @@ const handleTossPayment = async () => {
 
   isSubmitting.value = true
   tossError.value = ''
+  let createdOrderId: number | null = null
   inflight = (async () => {
     clearPendingTossPayment()
     const addrDetail = [current.shipping?.address1, current.shipping?.address2]
@@ -548,6 +549,7 @@ const handleTossPayment = async () => {
     if (!response?.order_id) {
       throw new Error('invalid order response')
     }
+    createdOrderId = Number(response.order_id)
 
     await ensureTossWidgets()
     const selectedMethod = paymentMethodWidget?.getSelectedPaymentMethod
@@ -593,6 +595,14 @@ const handleTossPayment = async () => {
     await inflight
   } catch (error) {
     console.error(error)
+    if (Number.isFinite(createdOrderId) && createdOrderId != null) {
+      try {
+        await abandonCreatedOrder(createdOrderId)
+      } catch (cleanupError) {
+        console.error(cleanupError)
+      }
+      clearPendingTossPayment()
+    }
     tossError.value = '결제 요청이 실패했습니다. 잠시 후 다시 시도해주세요.'
   } finally {
     inflight = null

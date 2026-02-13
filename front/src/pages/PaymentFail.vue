@@ -1,30 +1,47 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageContainer from '../components/PageContainer.vue'
 import PageHeader from '../components/PageHeader.vue'
+import { abandonCreatedOrder } from '../api/orders'
+import {
+  clearPendingTossPayment,
+  loadPendingTossPayment,
+} from '../lib/checkout/toss-payment-storage'
 
 const route = useRoute()
 const router = useRouter()
 
 const code = computed(() => String(route.query.code ?? ''))
-const message = computed(() => String(route.query.message ?? 'ê²°ì œ ìš”ì²­ì´ ì·¨ì†Œë˜ì—ˆìŠµë‹ˆë‹¤.'))
+const message = computed(() => String(route.query.message ?? '°áÁ¦ ¿äÃ»ÀÌ Ãë¼ÒµÇ¾ú°Å³ª ½ÇÆĞÇß½À´Ï´Ù.'))
+
+onMounted(async () => {
+  const pending = loadPendingTossPayment()
+  if (pending?.orderId) {
+    try {
+      await abandonCreatedOrder(pending.orderId)
+    } catch (error) {
+      console.error(error)
+    }
+  }
+  clearPendingTossPayment()
+})
 </script>
 
 <template>
   <PageContainer>
-    <PageHeader eyebrow="DESKIT" title="ê²°ì œ ì‹¤íŒ¨" />
+    <PageHeader eyebrow="DESKIT" title="°áÁ¦ ½ÇÆĞ" />
 
     <section class="status-card">
-      <h2 class="status-title">ê²°ì œì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.</h2>
-      <p class="status-desc">ì—ëŸ¬ ì½”ë“œ: {{ code || '-' }}</p>
-      <p class="status-desc">ì‚¬ìœ : {{ message }}</p>
+      <h2 class="status-title">°áÁ¦¿¡ ½ÇÆĞÇß½À´Ï´Ù.</h2>
+      <p class="status-desc">¿¡·¯ ÄÚµå: {{ code || '-' }}</p>
+      <p class="status-desc">»çÀ¯: {{ message }}</p>
       <div class="actions">
         <button type="button" class="btn ghost" @click="router.push('/checkout')">
-          ê²°ì œ í™”ë©´ìœ¼ë¡œ ëŒì•„ê°€ê¸°
+          °áÁ¦ È­¸éÀ¸·Î µ¹¾Æ°¡±â
         </button>
         <button type="button" class="btn primary" @click="router.push('/cart')">
-          ì¥ë°”êµ¬ë‹ˆë¡œ ì´ë™
+          Àå¹Ù±¸´Ï·Î ÀÌµ¿
         </button>
       </div>
     </section>

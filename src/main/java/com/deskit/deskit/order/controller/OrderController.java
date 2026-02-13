@@ -73,6 +73,16 @@ public class OrderController {
     return ResponseEntity.ok(orderService.requestCancel(memberId, orderId, request));
   }
 
+  @PostMapping("/{orderId}/abandon")
+  public ResponseEntity<Void> abandonCreatedOrder(
+          @AuthenticationPrincipal CustomOAuth2User user,
+          @PathVariable("orderId") Long orderId
+  ) {
+    Long memberId = resolveMemberId(user);
+    orderService.abandonCreatedOrder(memberId, orderId);
+    return ResponseEntity.noContent().build();
+  }
+
   private Long resolveMemberId(CustomOAuth2User user) {
     if (user == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "unauthorized");

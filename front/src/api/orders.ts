@@ -38,3 +38,7 @@ export const cancelOrder = async (orderId: number, reason: string): Promise<Orde
   )
   return response.data
 }
+
+export const abandonCreatedOrder = async (orderId: number): Promise<void> => {
+  await http.post(endpoints.orderAbandon(orderId), null, withCredentials)
+}

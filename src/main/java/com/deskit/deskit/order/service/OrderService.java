@@ -172,7 +172,7 @@ public class OrderService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found");
     }
 
-    return orderRepository.findByMemberIdOrderByCreatedAtDesc(memberId)
+    return orderRepository.findByMemberIdAndDeletedAtIsNullOrderByCreatedAtDesc(memberId)
       .stream()
       .map(OrderSummaryResponse::from)
       .collect(Collectors.toList());
@@ -190,7 +190,7 @@ public class OrderService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "order_id required");
     }
 
-    Order order = orderRepository.findById(orderId)
+    Order order = orderRepository.findByIdAndDeletedAtIsNull(orderId)
       .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "order not found"));
     if (!order.getMemberId().equals(memberId)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "forbidden");
@@ -202,6 +202,34 @@ public class OrderService {
       .collect(Collectors.toList());
 
     return OrderDetailResponse.from(order, items);
+  }
+
+  public void abandonCreatedOrder(Long memberId, Long orderId) {
+    if (memberId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "member_id required");
+    }
+    if (!memberRepository.existsById(memberId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found");
+    }
+    if (orderId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "order_id required");
+    }
+
+    Order order = orderRepository.findByIdAndDeletedAtIsNull(orderId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "order not found"));
+    if (!order.getMemberId().equals(memberId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "forbidden");
+    }
+
+    if (order.getStatus() != OrderStatus.CREATED) {
+      return;
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+    int updated = orderRepository.markCreatedOrderDeleted(orderId, memberId, now);
+    if (updated > 0) {
+      orderItemRepository.markDeletedByOrderId(orderId, now);
+    }
   }
 
   public OrderCancelResponse requestCancel(Long memberId, Long orderId, OrderCancelRequest request) {

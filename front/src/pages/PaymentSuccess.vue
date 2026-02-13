@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import PageContainer from '../components/PageContainer.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { confirmTossPayment } from '../api/payments'
+import { abandonCreatedOrder } from '../api/orders'
 import { clearCheckout } from '../lib/checkout/checkout-storage'
 import { removeCartItemsByProductIds } from '../lib/cart/cart-storage'
 import { appendOrder, saveLastOrder, type OrderReceipt } from '../lib/order/order-storage'
@@ -97,6 +98,14 @@ const finalize = async () => {
       params: { orderId: pending?.orderId ?? orderId },
     })
   } catch (error: any) {
+    if (pending?.orderId) {
+      try {
+        await abandonCreatedOrder(pending.orderId)
+      } catch (cleanupError) {
+        console.error(cleanupError)
+      }
+    }
+    clearPendingTossPayment()
     errorMessage.value =
       error?.response?.data?.message || '결제 확인 처리에 실패했습니다.'
   } finally {
