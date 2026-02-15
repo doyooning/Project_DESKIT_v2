@@ -20,6 +20,9 @@ public class S3Uploader {
   @Value("${cloud.aws.s3.endpoint}")
   private String endpoint;
 
+  @Value("${app.s3.public-prefix:deskit/public}")
+  private String publicPrefix;
+
   public S3Uploader(AmazonS3 amazonS3) {
     this.amazonS3 = amazonS3;
   }
@@ -37,7 +40,7 @@ public class S3Uploader {
   public String upload(String keyPrefix, MultipartFile file) {
     String originalFileName = file.getOriginalFilename();
     String extension = resolveExtension(originalFileName);
-    String objectKey = keyPrefix + "/" + UUID.randomUUID() + extension;
+    String objectKey = normalizePrefix(publicPrefix) + "/" + normalizePrefix(keyPrefix) + "/" + UUID.randomUUID() + extension;
 
     ObjectMetadata metadata = new ObjectMetadata();
     metadata.setContentType(file.getContentType());
@@ -60,5 +63,19 @@ public class S3Uploader {
       return "";
     }
     return originalFileName.substring(dotIndex);
+  }
+
+  private String normalizePrefix(String raw) {
+    if (raw == null) {
+      return "";
+    }
+    String value = raw.trim();
+    while (value.startsWith("/")) {
+      value = value.substring(1);
+    }
+    while (value.endsWith("/")) {
+      value = value.substring(0, value.length() - 1);
+    }
+    return value;
   }
 }

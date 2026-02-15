@@ -35,6 +35,15 @@ public class AwsS3Service {
     @Value("${cloud.aws.s3.endpoint}")
     private String endpoint;
 
+    @Value("${app.s3.public-prefix:deskit/public}")
+    private String publicPrefix;
+
+    @Value("${app.s3.tmp-prefix:deskit/tmp}")
+    private String tmpPrefix;
+
+    @Value("${app.s3.broadcast-prefix:deskit/broadcast}")
+    private String broadcastPrefix;
+
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("jpg", "jpeg", "png");
 
     public ImageUploadResponse uploadFile(Long sellerId, MultipartFile file, UploadType type) {
@@ -54,7 +63,7 @@ public class AwsS3Service {
 
         validateImageRatio(file, type);
 
-        String folderPath = "seller_" + sellerId + "/" + type.name().toLowerCase();
+        String folderPath = resolveUploadPrefix(type) + "/seller_" + sellerId + "/" + type.name().toLowerCase();
         String storedFileName = folderPath + "/" + UUID.randomUUID() + "." + extension;
 
         ObjectMetadata metadata = new ObjectMetadata();
@@ -73,7 +82,7 @@ public class AwsS3Service {
                     .build();
 
         } catch (IOException e) {
-            log.error("S3 업로드 에러", e);
+            log.error("S3 upload error", e);
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
@@ -82,7 +91,7 @@ public class AwsS3Service {
         if (key == null || key.isBlank()) {
             return null;
         }
-        String trimmedKey = key.startsWith("/") ? key.substring(1) : key;
+        String trimmedKey = normalizeKey(key);
         if (endpoint != null && !endpoint.isBlank()) {
             String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
             return base + "/" + bucket + "/" + trimmedKey;
@@ -91,36 +100,38 @@ public class AwsS3Service {
     }
 
     public void deleteFile(Long sellerId, String storedFileName) {
-        String expectedPrefix = "seller_" + sellerId + "/";
-        if (!storedFileName.startsWith(expectedPrefix)) {
-            log.warn("이미지 삭제 권한 없음: 요청자={}, 파일={}", sellerId, storedFileName);
+        String expectedPrefix = "/seller_" + sellerId + "/";
+        String normalizedKey = normalizeKey(storedFileName);
+        if (!(normalizedKey.contains(expectedPrefix) || normalizedKey.startsWith("seller_" + sellerId + "/"))) {
+            log.warn("Image delete forbidden: requester={}, file={}", sellerId, storedFileName);
             throw new BusinessException(ErrorCode.FORBIDDEN_ACCESS);
         }
 
         try {
-            if (amazonS3.doesObjectExist(bucket, storedFileName)) {
-                amazonS3.deleteObject(bucket, storedFileName);
+            if (amazonS3.doesObjectExist(bucket, normalizedKey)) {
+                amazonS3.deleteObject(bucket, normalizedKey);
             }
         } catch (Exception e) {
-            log.error("S3 파일 삭제 실패: {}", storedFileName, e);
+            log.error("S3 file delete failed: {}", storedFileName, e);
             throw new BusinessException(ErrorCode.FILE_DELETE_FAILED);
         }
     }
 
     public String uploadVodStream(InputStream inputStream, String pathKey, long contentLength) {
         try {
+            String key = normalizePrefix(broadcastPrefix) + "/" + normalizeKey(pathKey);
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(contentLength);
             metadata.setContentType("video/mp4");
 
-            amazonS3.putObject(new PutObjectRequest(bucket, pathKey, inputStream, metadata)
+            amazonS3.putObject(new PutObjectRequest(bucket, key, inputStream, metadata)
                     .withCannedAcl(CannedAccessControlList.PublicRead));
 
-            return endpoint != null ? endpoint + "/" + bucket + "/" + pathKey
-                    : amazonS3.getUrl(bucket, pathKey).toString();
+            return endpoint != null ? endpoint + "/" + bucket + "/" + key
+                    : amazonS3.getUrl(bucket, key).toString();
         } catch (Exception e) {
-            log.error("S3 Stream Upload Failed: {}", e.getMessage());
-            throw new RuntimeException("VOD 업로드 실패");
+            log.error("S3 stream upload failed: {}", e.getMessage());
+            throw new RuntimeException("VOD upload failed");
         }
     }
 
@@ -206,12 +217,12 @@ public class AwsS3Service {
             double targetRatio = type.getTargetRatio();
 
             if (Math.abs(actualRatio - targetRatio) > 0.05) {
-                log.warn("이미지 비율 불일치: 기대={}, 실제={}", targetRatio, actualRatio);
+                log.warn("Image ratio mismatch: target={}, actual={}", targetRatio, actualRatio);
                 throw new BusinessException(ErrorCode.INVALID_IMAGE_RATIO);
             }
 
         } catch (IOException e) {
-            log.error("이미지 읽기 및 검증 실패", e);
+            log.error("Image validation failed", e);
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }
@@ -221,5 +232,34 @@ public class AwsS3Service {
             throw new BusinessException(ErrorCode.INVALID_FILE_EXTENSION);
         }
         return fileName.substring(fileName.lastIndexOf(".") + 1);
+    }
+
+    private String normalizePrefix(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String value = raw.trim();
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value;
+    }
+
+    private String normalizeKey(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+        return value;
+    }
+
+    private String resolveUploadPrefix(UploadType type) {
+        if (type == UploadType.PRODUCT_IMAGE) {
+            return normalizePrefix(publicPrefix);
+        }
+        return normalizePrefix(tmpPrefix);
     }
 }

@@ -10,17 +10,16 @@ import com.deskit.deskit.account.service.CustomOAuth2UserService;
 import com.deskit.deskit.admin.security.AdminSecondFactorFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
@@ -28,11 +27,12 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -43,18 +43,27 @@ public class SecurityConfig {
     private final CustomOAuth2FailureHandler customOAuth2FailureHandler;
     private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
+    private final List<String> allowedOrigins;
+    private final boolean cookieSecure;
 
     public SecurityConfig(CustomOAuth2UserService customOAuth2UserService,
                           CustomSuccessHandler customSuccessHandler,
                           CustomOAuth2FailureHandler customOAuth2FailureHandler,
                           JWTUtil jwtUtil,
-                          RefreshRepository refreshRepository) {
+                          RefreshRepository refreshRepository,
+                          @Value("${app.cors.allowed-origins:http://localhost:5173}") String allowedOriginsRaw,
+                          @Value("${app.cookie.secure:false}") boolean cookieSecure) {
 
         this.customOAuth2UserService = customOAuth2UserService;
         this.customSuccessHandler = customSuccessHandler;
         this.customOAuth2FailureHandler = customOAuth2FailureHandler;
         this.jwtUtil = jwtUtil;
         this.refreshRepository = refreshRepository;
+        this.allowedOrigins = Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toList());
+        this.cookieSecure = cookieSecure;
     }
 
     @Bean
@@ -85,7 +94,7 @@ public class SecurityConfig {
 
                         CorsConfiguration configuration = new CorsConfiguration();
 
-                        configuration.setAllowedOrigins(Collections.singletonList("http://localhost:5173"));
+                        configuration.setAllowedOrigins(allowedOrigins);
                         configuration.setAllowedMethods(Collections.singletonList("*"));
                         configuration.setAllowCredentials(true);
                         configuration.setAllowedHeaders(Collections.singletonList("*"));
@@ -117,7 +126,7 @@ public class SecurityConfig {
                 .addFilterAfter(new AdminSecondFactorFilter(), JWTFilter.class);
 
         http
-                .addFilterBefore(new CustomLogoutFilter(jwtUtil, refreshRepository), LogoutFilter.class);
+                .addFilterBefore(new CustomLogoutFilter(jwtUtil, refreshRepository, cookieSecure), LogoutFilter.class);
 
         //oauth2
         http

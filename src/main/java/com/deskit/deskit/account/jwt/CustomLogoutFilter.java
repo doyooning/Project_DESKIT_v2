@@ -18,11 +18,13 @@ public class CustomLogoutFilter extends GenericFilterBean {
 
     private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
+    private final boolean cookieSecure;
 
-    public CustomLogoutFilter(JWTUtil jwtUtil, RefreshRepository refreshRepository) {
+    public CustomLogoutFilter(JWTUtil jwtUtil, RefreshRepository refreshRepository, boolean cookieSecure) {
 
         this.jwtUtil = jwtUtil;
         this.refreshRepository = refreshRepository;
+        this.cookieSecure = cookieSecure;
     }
 
     @Override
@@ -114,10 +116,12 @@ public class CustomLogoutFilter extends GenericFilterBean {
         Cookie cookie = new Cookie("refresh", null);
         cookie.setMaxAge(0);
         cookie.setPath("/");
+        cookie.setSecure(cookieSecure);
 
         Cookie accessCookie = new Cookie("access", null);
         accessCookie.setMaxAge(0);
         accessCookie.setPath("/");
+        accessCookie.setSecure(cookieSecure);
 
         response.setHeader("access", "");
         response.addCookie(cookie);

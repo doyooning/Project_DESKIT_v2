@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,10 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final RefreshRepository refreshRepository;
     private final AdminRepository adminRepository;
     private final AdminAuthService adminAuthService;
+    @Value("${app.web-base-url:http://localhost:5173}")
+    private String webBaseUrl;
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
 
     @Override
     public void onAuthenticationSuccess(
@@ -55,18 +60,18 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             response.addCookie(createCookie("access", signupToken, Math.toIntExact(300000L / 1000)));
             // Encoded token for safe query parameter transport.
             String encodedToken = URLEncoder.encode(signupToken, StandardCharsets.UTF_8);
-            response.sendRedirect("http://localhost:5173/signup?token=" + encodedToken);
+            response.sendRedirect(buildWebUrl("/signup?token=" + encodedToken));
             return;
         }
 
         if ("ROLE_ADMIN".equals(role)) {
             Admin admin = adminRepository.findByLoginId(user.getEmail());
             if (admin == null) {
-                response.sendRedirect("http://localhost:5173/login");
+                response.sendRedirect(buildWebUrl("/login"));
                 return;
             }
             adminAuthService.startSession(admin, request.getSession(true));
-            response.sendRedirect("http://localhost:5173/admin/verify");
+            response.sendRedirect(buildWebUrl("/admin/verify"));
             return;
         }
 
@@ -88,7 +93,7 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         Cookie cookie = new Cookie(key, value);
 
         cookie.setMaxAge(maxAge);
-        // cookie.setSecure(true);
+        cookie.setSecure(cookieSecure);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
 
@@ -97,9 +102,20 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private String resolveRedirectUrl(String role) {
         if (role != null && role.startsWith("ROLE_SELLER")) {
-            return "http://localhost:5173/seller";
+            return buildWebUrl("/seller");
         }
-        return "http://localhost:5173/";
+        return buildWebUrl("/");
+    }
+
+    private String buildWebUrl(String path) {
+        String base = webBaseUrl == null ? "" : webBaseUrl.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        if (path.startsWith("/")) {
+            return base + path;
+        }
+        return base + "/" + path;
     }
 
 }

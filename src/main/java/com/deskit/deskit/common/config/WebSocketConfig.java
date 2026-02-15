@@ -4,6 +4,7 @@ import com.deskit.deskit.account.jwt.JWTUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -16,14 +17,24 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
     private final JWTUtil jwtUtil;
+    private final List<String> allowedOriginPatterns;
 
-    public WebSocketConfig(JWTUtil jwtUtil) {
+    public WebSocketConfig(JWTUtil jwtUtil,
+                           @Value("${app.cors.allowed-origins:http://localhost:5173}") String allowedOriginsRaw) {
         this.jwtUtil = jwtUtil;
+        this.allowedOriginPatterns = Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -35,16 +46,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-public")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOriginPatterns.toArray(String[]::new))
                 .withSockJS();
 
         registry.addEndpoint("/ws","/api/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOriginPatterns.toArray(String[]::new))
                 .addInterceptors(new WebSocketAuthHandshakeInterceptor(jwtUtil))
                 .setHandshakeHandler(new WebSocketAuthHandshakeHandler());
 
         registry.addEndpoint("/api/ws-public")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(allowedOriginPatterns.toArray(String[]::new))
                 .withSockJS();
         // 여긴 withSockJS() 붙이지 말고 "진짜 websocket"만
     }
