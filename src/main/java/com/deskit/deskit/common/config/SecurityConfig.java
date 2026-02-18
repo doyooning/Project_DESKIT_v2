@@ -150,7 +150,7 @@ public class SecurityConfig {
         //경로별 인가 작업
         http
                 .authorizeHttpRequests((auth) -> auth
-                        .requestMatchers("/ws/info/**", "/ws/**").permitAll()
+                        .requestMatchers("/ws/info/**", "/ws/**", "/ws", "/api/ws/**", "/api/ws").permitAll()
                         .requestMatchers(
                                 "/",
                                 "/index.html",
