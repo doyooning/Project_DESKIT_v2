@@ -24,7 +24,7 @@ public class ReissueController {
     @Value("${app.cookie.secure:false}")
     private boolean cookieSecure;
 
-    @PostMapping("/reissue")
+    @PostMapping("/api/reissue")
     public ResponseEntity<?> reissue(HttpServletRequest request, HttpServletResponse response) {
 
         //get refresh token

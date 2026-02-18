@@ -207,7 +207,7 @@ export const hydrateSessionUser = async (): Promise<boolean> => {
     let response = await fetch(`/api/my`, { credentials: 'include', headers })
     if (!response.ok) {
       if (response.status === 401) {
-        const reissue = await fetch(`${webBase}/reissue`, {
+        const reissue = await fetch(`${webBase}/api/reissue`, {
           method: 'POST',
           credentials: 'include',
         })

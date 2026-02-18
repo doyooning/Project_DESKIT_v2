@@ -188,7 +188,7 @@ public class SecurityConfig {
                                 "/",
                                 "/chat",
                                 "/chat/**",
-                                "/reissue",
+                                "/api/reissue",
                                 "/api/home/**",
                                 "/api/broadcasts/**",
                                 "/api/categories",
