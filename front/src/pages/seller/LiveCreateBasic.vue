@@ -583,7 +583,7 @@ const addDays = (date: Date, days: number) => {
   return next
 }
 
-const minDate = computed(() => formatLocalDate(addDays(new Date(), 1)))
+const minDate = computed(() => formatLocalDate(new Date()))
 
 const maxDate = computed(() => formatLocalDate(addDays(new Date(), 15)))
 
