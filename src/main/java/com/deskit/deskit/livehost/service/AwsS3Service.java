@@ -71,13 +71,12 @@ public class AwsS3Service {
         metadata.setContentLength(file.getSize());
 
         try (InputStream inputStream = file.getInputStream()) {
-            amazonS3.putObject(new PutObjectRequest(bucket, storedFileName, inputStream, metadata)
-                    .withCannedAcl(CannedAccessControlList.PublicRead));
+            amazonS3.putObject(new PutObjectRequest(bucket, storedFileName, inputStream, metadata));
 
             return ImageUploadResponse.builder()
                     .originalFileName(originalFileName)
                     .storedFileName(storedFileName)
-                    .fileUrl(amazonS3.getUrl(bucket, storedFileName).toString())
+                    .fileUrl(buildPublicUrl(storedFileName))
                     .fileSize(file.getSize())
                     .build();
 
@@ -124,8 +123,7 @@ public class AwsS3Service {
             metadata.setContentLength(contentLength);
             metadata.setContentType("video/mp4");
 
-            amazonS3.putObject(new PutObjectRequest(bucket, key, inputStream, metadata)
-                    .withCannedAcl(CannedAccessControlList.PublicRead));
+            amazonS3.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
 
             return endpoint != null ? endpoint + "/" + bucket + "/" + key
                     : amazonS3.getUrl(bucket, key).toString();
@@ -259,6 +257,9 @@ public class AwsS3Service {
     private String resolveUploadPrefix(UploadType type) {
         if (type == UploadType.PRODUCT_IMAGE) {
             return normalizePrefix(publicPrefix);
+        }
+        if (type == UploadType.THUMBNAIL || type == UploadType.WAIT_SCREEN) {
+            return normalizePrefix(broadcastPrefix);
         }
         return normalizePrefix(tmpPrefix);
     }
