@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 public class CustomOAuth2User implements OAuth2User {
@@ -19,8 +20,14 @@ public class CustomOAuth2User implements OAuth2User {
 
     @Override
     public Map<String, Object> getAttributes() {
-
-        return null;
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put("username", userDTO.getUsername());
+        attributes.put("role", userDTO.getRole());
+        attributes.put("name", userDTO.getName());
+        attributes.put("email", userDTO.getEmail());
+        attributes.put("profileUrl", userDTO.getProfileUrl());
+        attributes.put("newUser", userDTO.isNewUser());
+        return attributes;
     }
 
     @Override
@@ -42,8 +49,16 @@ public class CustomOAuth2User implements OAuth2User {
 
     @Override
     public String getName() {
-
-        return userDTO.getName();
+        if (userDTO.getName() != null && !userDTO.getName().isBlank()) {
+            return userDTO.getName();
+        }
+        if (userDTO.getUsername() != null && !userDTO.getUsername().isBlank()) {
+            return userDTO.getUsername();
+        }
+        if (userDTO.getEmail() != null && !userDTO.getEmail().isBlank()) {
+            return userDTO.getEmail();
+        }
+        return "anonymous";
     }
 
     public String getUsername() {
