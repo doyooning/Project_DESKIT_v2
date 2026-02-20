@@ -30,7 +30,7 @@ import {
 } from '../../lib/live/api'
 import { parseLiveDate } from '../../lib/live/utils'
 import { useNow } from '../../lib/live/useNow'
-import { getAuthUser } from '../../lib/auth'
+import { getAuthUser, normalizeDisplayName } from '../../lib/auth'
 import { resolveViewerId } from '../../lib/live/viewer'
 import { computeLifecycleStatus, getScheduledEndMs, normalizeBroadcastStatus, type BroadcastStatus } from '../../lib/broadcastStatus'
 import { createImageErrorHandler, resolveProductImageUrlFromRaw } from '../../lib/images/productImages'
@@ -251,9 +251,7 @@ const ENTER_SENT_KEY_PREFIX = 'deskit_live_enter_sent_v1'
 const refreshAuth = () => {
   const user = getAuthUser()
   isLoggedIn.value = user !== null
-  if (user?.name) {
-    nickname.value = user.name
-  }
+  nickname.value = normalizeDisplayName(user?.name, nickname.value || '판매자')
   memberEmail.value = user?.email || memberEmail.value || 'seller@deskit.com'
 }
 
@@ -310,7 +308,7 @@ const appendMessage = (payload: LiveChatMessageDTO) => {
   const isSystem = payload.type !== 'TALK'
   chatMessages.value.push({
     id: `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    name: isSystem ? 'SYSTEM' : payload.sender || 'unknown',
+    name: isSystem ? 'SYSTEM' : normalizeDisplayName(payload.sender, '시청자'),
     message: payload.content ?? '',
     senderRole: payload.senderRole,
     memberLoginId: payload.memberEmail,
@@ -347,7 +345,7 @@ const sendSocketMessage = (type: LiveMessageType, content: string) => {
     broadcastId: broadcastId.value,
     memberEmail: memberEmail.value,
     type,
-    sender: nickname.value,
+    sender: normalizeDisplayName(nickname.value, '판매자'),
     content,
     vodPlayTime: 0,
     sentAt: Date.now(),
@@ -1217,7 +1215,7 @@ const hydrateStream = async () => {
 
     chatMessages.value = chats.map((item) => ({
       id: `${item.sentAt}-${item.sender}`,
-      name: item.sender || item.memberEmail || '시청자',
+      name: normalizeDisplayName(item.sender, '시청자'),
       message: item.content,
       senderRole: item.senderRole,
       memberLoginId: item.memberEmail,

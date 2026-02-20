@@ -38,6 +38,20 @@ export const getAuthUser = (): AuthUser | null => sessionUser
 
 export const isLoggedIn = (): boolean => sessionUser !== null
 
+export const isEmailAddressLike = (value?: string): boolean => {
+  const candidate = (value ?? '').trim()
+  if (!candidate) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)
+}
+
+export const normalizeDisplayName = (value: string | null | undefined, fallback = ''): string => {
+  const candidate = (value ?? '').trim()
+  if (!candidate || isEmailAddressLike(candidate)) {
+    return fallback.trim()
+  }
+  return candidate
+}
+
 const normalizeRole = (value: string): string => value.trim().toUpperCase()
 
 const isSellerCategory = (value: string): boolean => {
@@ -225,9 +239,12 @@ export const hydrateSessionUser = async (): Promise<boolean> => {
     const memberCategory = resolveMemberCategory(payload.memberCategory, payload.role)
     const sellerRole = resolveSellerRole(payload.sellerRole, payload.role)
 
+    const email = typeof payload.email === 'string' ? payload.email : ''
+    const name = normalizeDisplayName(typeof payload.name === 'string' ? payload.name : '')
+
     setAuthUser({
-      name: typeof payload.name === 'string' ? payload.name : '',
-      email: typeof payload.email === 'string' ? payload.email : '',
+      name,
+      email,
       signupType: typeof payload.signupType === 'string' ? payload.signupType : '',
       memberCategory,
       profileUrl: typeof payload.profileUrl === 'string' ? payload.profileUrl : '',

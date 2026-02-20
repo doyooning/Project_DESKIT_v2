@@ -698,16 +698,25 @@ public class BroadcastService {
             openViduService.startRecording(broadcastId);
         } catch (OpenViduHttpException e) {
             int status = e.getStatus();
-            if (status == 406) {
+            if (isRetriableRecordingStartStatus(status)) {
                 scheduleRecordingStartRetry(broadcastId, "publisher_stream_created", status);
+                log.warn("OpenVidu recording start deferred by retry: broadcastId={}, status={}, message={}",
+                        broadcastId, status, e.getMessage());
             } else if (status == 409) {
                 log.info("OpenVidu recording already started: broadcastId={}", broadcastId);
+            } else if (status == 501) {
+                log.error("OpenVidu recording module appears disabled: broadcastId={}, status={}, message={}",
+                        broadcastId, status, e.getMessage());
+                throw new BusinessException(ErrorCode.OPENVIDU_ERROR);
             } else {
-                log.error("OpenVidu recording start failed: broadcastId={}, status={}", broadcastId, status);
+                log.error("OpenVidu recording start failed: broadcastId={}, status={}, message={}",
+                        broadcastId, status, e.getMessage());
                 throw new BusinessException(ErrorCode.OPENVIDU_ERROR);
             }
         } catch (OpenViduJavaClientException e) {
             scheduleRecordingStartRetry(broadcastId, "publisher_stream_created", 0);
+            log.warn("OpenVidu recording start deferred by retry: broadcastId={}, status=0, message={}",
+                    broadcastId, e.getMessage());
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.OPENVIDU_ERROR);
         }
@@ -1816,7 +1825,7 @@ public class BroadcastService {
             log.info("OpenVidu recording start succeeded after retry: broadcastId={}, reason={}", broadcastId, reason);
         } catch (OpenViduHttpException e) {
             int status = e.getStatus();
-            if (status == 406) {
+            if (isRetriableRecordingStartStatus(status)) {
                 scheduleRecordingStartRetry(broadcastId, reason, status);
                 return;
             }
@@ -1826,11 +1835,15 @@ public class BroadcastService {
                 return;
             }
             redisService.clearRecordingStartRetry(broadcastId);
-            log.error("OpenVidu recording start retry failed: broadcastId={}, reason={}, status={}",
-                    broadcastId, reason, status);
+            log.error("OpenVidu recording start retry failed: broadcastId={}, reason={}, status={}, message={}",
+                    broadcastId, reason, status, e.getMessage());
         } catch (OpenViduJavaClientException e) {
             scheduleRecordingStartRetry(broadcastId, reason, 0);
         }
+    }
+
+    private boolean isRetriableRecordingStartStatus(int status) {
+        return status == 406 || (status >= 500 && status < 600 && status != 501);
     }
 
     private void scheduleRecordingStartRetry(Long broadcastId, String reason, int status) {

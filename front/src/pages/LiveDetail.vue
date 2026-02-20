@@ -10,7 +10,7 @@ import PageHeader from '../components/PageHeader.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import { parseLiveDate } from '../lib/live/utils'
 import { useNow } from '../lib/live/useNow'
-import { getAuthUser, hydrateSessionUser } from '../lib/auth'
+import { getAuthUser, hydrateSessionUser, normalizeDisplayName } from '../lib/auth'
 import { resolveViewerId } from '../lib/live/viewer'
 import { createImageErrorHandler } from '../lib/images/productImages'
 // import { resolveWsBase } from '../lib/ws'
@@ -941,9 +941,7 @@ const appendMessage = (message: ChatMessage) => {
 const refreshAuth = () => {
   const user = getAuthUser()
   isLoggedIn.value = user !== null
-  if (user?.name) {
-    nickname.value = user.name
-  }
+  nickname.value = normalizeDisplayName(user?.name, nickname.value)
   // memberId 관련 로직을 제거하고 email을 할당
   memberEmail.value = user?.email || ""
 }
@@ -956,7 +954,7 @@ const sendSocketMessage = (type: LiveMessageType, content: string) => {
     broadcastId: broadcastId.value,
     memberEmail: memberEmail.value, // [수정] memberEmail 사용
     type,
-    sender: nickname.value,
+    sender: normalizeDisplayName(nickname.value, '시청자'),
     content,
     connectionId: openviduConnectionId.value ?? undefined,
     vodPlayTime: 0,
@@ -970,7 +968,7 @@ const sendSocketMessage = (type: LiveMessageType, content: string) => {
 
 const handleIncomingMessage = (payload: LiveChatMessageDTO) => {
   const kind: ChatMessage['kind'] = payload.type === 'TALK' ? 'user' : 'system'
-  const user = kind === 'system' ? 'system' : payload.sender || 'unknown'
+  const user = kind === 'system' ? 'system' : normalizeDisplayName(payload.sender, '시청자')
   const sentAt = payload.sentAt ? new Date(payload.sentAt) : new Date()
   appendMessage({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1000,7 +998,7 @@ const fetchRecentMessages = async () => {
       .filter((item) => item.type === 'TALK')
       .map((item) => ({
         id: `${item.sentAt ?? Date.now()}-${Math.random().toString(16).slice(2)}`,
-        user: item.sender || 'unknown',
+        user: normalizeDisplayName(item.sender, '시청자'),
         text: item.content ?? '',
         at: new Date(item.sentAt ?? Date.now()),
         kind: 'user' as const,

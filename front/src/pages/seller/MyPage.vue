@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageContainer from '../../components/PageContainer.vue'
 import PageHeader from '../../components/PageHeader.vue'
-import { getAuthUser, requestLogout, requestWithdraw } from '../../lib/auth'
+import { getAuthUser, normalizeDisplayName, requestLogout, requestWithdraw } from '../../lib/auth'
 
 const router = useRouter()
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -43,7 +43,7 @@ const loadUser = () => {
     return
   }
   user.value = {
-    name: parsed.name || '',
+    name: normalizeDisplayName(parsed.name, '판매자'),
     email: parsed.email || '',
     signupType: parsed.signupType || '',
     memberCategory: parsed.memberCategory || '',
@@ -56,7 +56,7 @@ const display = computed(() => {
   const current = user.value
   const fallbackSignupType = current ? '소셜 회원' : ''
   return {
-    name: current?.name || '판매자',
+    name: normalizeDisplayName(current?.name, '판매자'),
     email: current?.email || '',
     signupType: current?.signupType || fallbackSignupType,
     memberCategory: current?.memberCategory || '판매자',
@@ -932,4 +932,3 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 </style>
-

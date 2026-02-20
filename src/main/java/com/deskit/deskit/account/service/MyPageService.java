@@ -58,7 +58,7 @@ public class MyPageService {
 			email = loginId;
 		}
 
-		if (name.isEmpty() && !loginId.isEmpty()) {
+		if ((name.isEmpty() || isEmailLike(name)) && !loginId.isEmpty()) {
 			name = member == null ? resolveName(normalizedRole, loginId) : safe(member.getName());
 		}
 
@@ -180,5 +180,12 @@ public class MyPageService {
 
 	private String safe(String value) {
 		return value == null ? "" : value.trim();
+	}
+
+	private boolean isEmailLike(String value) {
+		if (value == null || value.isBlank()) {
+			return false;
+		}
+		return value.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 	}
 }

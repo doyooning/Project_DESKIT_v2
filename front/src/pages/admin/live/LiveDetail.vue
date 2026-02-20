@@ -18,7 +18,7 @@ import {
 import { parseLiveDate } from '../../../lib/live/utils'
 import { useNow } from '../../../lib/live/useNow'
 import { computeLifecycleStatus, getBroadcastStatusLabel, getScheduledEndMs, normalizeBroadcastStatus } from '../../../lib/broadcastStatus'
-import { getAuthUser } from '../../../lib/auth'
+import { getAuthUser, normalizeDisplayName } from '../../../lib/auth'
 import { createImageErrorHandler } from '../../../lib/images/productImages'
 // import { resolveWsBase } from '../../../lib/ws'
 import { resolveViewerId } from '../../../lib/live/viewer'
@@ -173,7 +173,7 @@ const refreshAuth = () => {
   const user = getAuthUser()
   if (user) {
     memberEmail.value = user.email || ""
-    nickname.value = user.name || "관리자"
+    nickname.value = normalizeDisplayName(user.name, '관리자')
   }
 }
 
@@ -302,7 +302,7 @@ const handleIncomingMessage = (payload: LiveChatMessageDTO) => {
 
   chatMessages.value.push({
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    user: payload.type === 'TALK' ? (payload.sender || '알 수 없음') : 'SYSTEM',
+    user: payload.type === 'TALK' ? normalizeDisplayName(payload.sender, '시청자') : 'SYSTEM',
     text: payload.content || '',
     time: timeStr,
     kind: payload.type === 'TALK' ? 'user' : 'system',
@@ -335,7 +335,7 @@ const fetchRecentMessages = async () => {
 
           return {
             id: `${item.sentAt ?? Date.now()}-${Math.random().toString(16).slice(2)}`,
-            user: item.sender || 'unknown',
+            user: normalizeDisplayName(item.sender, '시청자'),
             text: item.content ?? '',
             time: timeStr,
             kind: 'user',
@@ -404,7 +404,7 @@ const sendChat = () => {
     broadcastId: broadcastId.value,
     memberEmail: memberEmail.value,
     type: 'TALK',
-    sender: nickname.value,
+    sender: normalizeDisplayName(nickname.value, '관리자'),
     content: chatText.value.trim(),
     vodPlayTime: 0,
     sentAt: Date.now(),

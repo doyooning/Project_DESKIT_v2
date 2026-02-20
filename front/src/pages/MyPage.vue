@@ -5,7 +5,7 @@ import PageContainer from '../components/PageContainer.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { type DbProduct } from '../lib/products-data'
 import { normalizeProducts } from '../api/products-normalizer'
-import { getAuthUser, requestLogout, requestWithdraw } from '../lib/auth'
+import { getAuthUser, normalizeDisplayName, requestLogout, requestWithdraw } from '../lib/auth'
 
 type UserInfo = {
   name: string
@@ -42,7 +42,7 @@ const loadUser = () => {
     return
   }
   user.value = {
-    name: parsed.name || '',
+    name: normalizeDisplayName(parsed.name, '회원'),
     email: parsed.email || '',
     signupType: parsed.signupType || '',
     memberCategory: parsed.memberCategory || '',
@@ -54,7 +54,13 @@ const loadUser = () => {
 }
 
 const hasUser = computed(() => !!user.value)
-const display = computed(() => user.value ?? EMPTY_USER)
+const display = computed(() => {
+  const current = user.value ?? EMPTY_USER
+  return {
+    ...current,
+    name: normalizeDisplayName(current.name, '회원'),
+  }
+})
 const hasPreference = computed(() => {
   const mbti = display.value.mbti?.trim()
   const job = display.value.job?.trim()
