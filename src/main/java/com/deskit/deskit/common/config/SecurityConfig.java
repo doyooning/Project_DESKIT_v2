@@ -150,7 +150,7 @@ public class SecurityConfig {
         //경로별 인가 작업
         http
                 .authorizeHttpRequests((auth) -> auth
-                        .requestMatchers("/ws/info/**", "/ws/**", "/ws", "/api/ws/**", "/api/ws").permitAll()
+                        .requestMatchers("/ws/info/**", "/ws/**", "/ws", "/api/ws/**", "/api/ws", "/api/ws-public/**").permitAll()
                         .requestMatchers(
                                 "/",
                                 "/index.html",
@@ -180,7 +180,7 @@ public class SecurityConfig {
                                 "/api/products",
                                 "/api/setups",
                                 "/api/home/**",
-                                "/livechats/**",
+                                "/api/livechats/**",
                                 "/products/**",
                                 "/setups/**"
                         ).permitAll()
@@ -212,6 +212,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/my/member-id").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/my/settings/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/recommendations/**").hasAuthority("ROLE_MEMBER")
+                        .requestMatchers("/api/member/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/seller/**").hasAnyAuthority(
                                 "ROLE_SELLER_OWNER",
                                 "ROLE_SELLER_MANAGER")

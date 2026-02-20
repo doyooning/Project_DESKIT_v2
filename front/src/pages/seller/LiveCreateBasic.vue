@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import PageContainer from '../../components/PageContainer.vue'
 import PageHeader from '../../components/PageHeader.vue'
@@ -51,6 +51,8 @@ const categories = ref<BroadcastCategory[]>([])
 const reservationSlots = ref<ReservationSlot[]>([])
 const reservedTimes = ref<string[]>([])
 const activeDate = ref('')
+const nowTick = ref(Date.now())
+let nowTickTimer: number | null = null
 const cropperOpen = ref(false)
 const cropperSource = ref('')
 const cropperFileName = ref('')
@@ -587,6 +589,25 @@ const minDate = computed(() => formatLocalDate(new Date()))
 
 const maxDate = computed(() => formatLocalDate(addDays(new Date(), 15)))
 
+const isPastSlotForToday = (date: string, time: string) => {
+  if (!date || date !== minDate.value) return false
+  const [hourText, minuteText] = time.split(':')
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false
+  const slotDateTime = new Date(`${date}T00:00:00`)
+  slotDateTime.setHours(hour, minute, 0, 0)
+  return slotDateTime.getTime() <= nowTick.value
+}
+
+const getAvailableTimes = (date: string) => {
+  if (!date) return []
+  return reservationSlots.value
+    .filter((slot) => !reservedTimes.value.includes(slot.time))
+    .filter((slot) => !isPastSlotForToday(date, slot.time))
+    .map((slot) => slot.time)
+}
+
 const normalizeCategorySelection = () => {
   if (!draft.value.category) return
   const current = categories.value.find((category) => category.id.toString() === draft.value.category)
@@ -644,7 +665,7 @@ const reloadReservationSlots = async (date: string) => {
     } catch {
       reservedTimes.value = []
     }
-    const availableTimes = reservationSlots.value.map((slot) => slot.time).filter((time) => !reservedTimes.value.includes(time))
+    const availableTimes = getAvailableTimes(date)
     if (draft.value.time && !availableTimes.includes(draft.value.time)) {
       draft.value.time = ''
     }
@@ -654,8 +675,7 @@ const reloadReservationSlots = async (date: string) => {
 }
 
 const timeOptions = computed(() => {
-  if (!reservedTimes.value.length) return reservationSlots.value.map((slot) => slot.time)
-  return reservationSlots.value.filter((slot) => !reservedTimes.value.includes(slot.time)).map((slot) => slot.time)
+  return getAvailableTimes(draft.value.date)
 })
 
 watch(
@@ -697,6 +717,9 @@ watch(cropperOpen, (open, wasOpen) => {
 onMounted(async () => {
   await loadCategories()
   await loadProducts()
+  nowTickTimer = window.setInterval(() => {
+    nowTick.value = Date.now()
+  }, 30_000)
   draft.value.products = draft.value.products.map((product) => clampProductQuantity(product))
   syncQuantityInputs(draft.value.products)
   if (draft.value.date) {
@@ -712,6 +735,12 @@ watch(
     },
 )
 
+watch(timeOptions, (options) => {
+  if (draft.value.time && !options.includes(draft.value.time)) {
+    draft.value.time = ''
+  }
+})
+
 watch(
     draft,
     () => {
@@ -719,6 +748,13 @@ watch(
     },
     { deep: true },
 )
+
+onBeforeUnmount(() => {
+  if (nowTickTimer !== null) {
+    window.clearInterval(nowTickTimer)
+    nowTickTimer = null
+  }
+})
 </script>
 
 <template>
