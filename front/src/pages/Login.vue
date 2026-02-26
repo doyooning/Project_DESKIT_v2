@@ -2,13 +2,16 @@
 import { useRouter } from 'vue-router'
 import PageContainer from '../components/PageContainer.vue'
 import PageHeader from '../components/PageHeader.vue'
+import { clearClientAuthState, requestLogout } from '../lib/auth'
 
 type Provider = 'kakao' | 'naver' | 'google'
 
 const router = useRouter()
 const oauthBase = import.meta.env.VITE_OAUTH_BASE_URL || window.location.origin
 
-const handleLogin = (provider: Provider) => {
+const handleLogin = async (provider: Provider) => {
+  clearClientAuthState()
+  await requestLogout().catch(() => {})
   window.location.href = `${oauthBase}/oauth2/authorization/${provider}`
 }
 </script>

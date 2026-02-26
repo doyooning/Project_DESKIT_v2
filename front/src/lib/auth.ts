@@ -29,6 +29,18 @@ const webBase = import.meta.env.VITE_WEB_BASE_URL || window.location.origin
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 let sessionUser: AuthUser | null = null
 
+const clearStoredAuthTokens = (): void => {
+  ;['access', 'access_token'].forEach((key) => {
+    localStorage.removeItem(key)
+    sessionStorage.removeItem(key)
+  })
+}
+
+export const clearClientAuthState = (): void => {
+  clearStoredAuthTokens()
+  setAuthUser(null)
+}
+
 export const setAuthUser = (next: AuthUser | null): void => {
   sessionUser = next
   window.dispatchEvent(new Event('deskit-user-updated'))
@@ -148,6 +160,7 @@ export const loginAdmin = (): void => {
 }
 
 export const logout = (): void => {
+  clearStoredAuthTokens()
   setAuthUser(null)
   ;['deskit-user', 'deskit-auth', 'token'].forEach((key) => localStorage.removeItem(key))
 }

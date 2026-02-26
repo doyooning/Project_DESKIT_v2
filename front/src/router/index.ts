@@ -293,8 +293,7 @@ router.beforeEach(async (to) => {
     (to.path === '/' ||
     (to.path.startsWith('/my') ||
       isSellerPath ||
-      (isAdminPath && !isAdminVerify) ||
-      to.path === '/login'))
+      (isAdminPath && !isAdminVerify)))
 
   if (shouldHydrateSession) {
     const sessionOk = await hydrateSessionUser()

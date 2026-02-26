@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageContainer from '../components/PageContainer.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { setAuthUser } from '../lib/auth'
+import { clearClientAuthState, setAuthUser } from '../lib/auth'
 
 type PendingAdmin = {
   name: string
@@ -96,11 +96,13 @@ const verifyCode = async () => {
   await router.push('/admin')
 }
 
-const backToLogin = () => {
-  router.push('/login').catch(() => {})
+const backToMain = () => {
+  clearClientAuthState()
+  router.push('/').catch(() => {})
 }
 
 onMounted(() => {
+  clearClientAuthState()
   loadPending()
 })
 </script>
@@ -126,12 +128,15 @@ onMounted(() => {
             </div>
           </label>
 
-          <button type="button" class="btn ghost" @click="sendCode">인증번호 재전송</button>
+          <div class="actions">
+            <button type="button" class="btn ghost" @click="sendCode">인증번호 재전송</button>
+            <button type="button" class="btn ghost" @click="backToMain">뒤로가기</button>
+          </div>
         </div>
 
         <div v-else class="alert">
           <p>인증 세션이 없습니다. 다시 로그인해주세요.</p>
-          <button type="button" class="btn" @click="backToLogin">로그인으로 이동</button>
+          <button type="button" class="btn" @click="backToMain">메인으로 이동</button>
         </div>
 
         <p v-if="form.sentMessage" class="message success">{{ form.sentMessage }}</p>
@@ -188,6 +193,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .field {
@@ -265,4 +276,3 @@ onMounted(() => {
   }
 }
 </style>
-

@@ -95,6 +95,10 @@ const handleDocumentClick = (event: MouseEvent) => {
 }
 
 const hydrateAuth = async () => {
+  if (route.path === '/login' || route.path === '/admin/verify') {
+    refreshAuth()
+    return
+  }
   if (!checkLoggedIn()) {
     await hydrateSessionUser()
   }
