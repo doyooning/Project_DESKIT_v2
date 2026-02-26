@@ -44,6 +44,10 @@ jobs:
           distribution: corretto
           java-version: "17"
           cache: gradle
+          cache-dependency-path: |
+            build.gradle
+            settings.gradle
+            gradle/wrapper/gradle-wrapper.properties
 
       - name: Build backend jar
         run: ./gradlew clean bootJar

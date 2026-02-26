@@ -1,0 +1,100 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.4.12'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.deskit'
+version = '0.0.1-SNAPSHOT'
+description = 'deskit project for Spring Boot'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Spring Boot
+	implementation 'org.springframework.boot:spring-boot-starter'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// MySQL
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testRuntimeOnly 'com.h2database:h2'
+
+	// Redis
+	implementation "org.springframework.ai:spring-ai-starter-vector-store-redis"
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// [추가] Redis 분산락/큐 구현체 (Redisson)
+	implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
+
+	// Spring Security
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	testImplementation 'org.springframework.security:spring-security-test'
+
+	// JWT
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+	implementation 'io.jsonwebtoken:jjwt-impl:0.12.3'
+	implementation 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+
+	// OpenVidu
+	implementation 'io.openvidu:openvidu-java-client:2.30.0' // 미디어 서버 버전과 맞춰야 함
+	// NCP Object Storage (AWS S3 호환) 연동을 위한 라이브러리
+	implementation 'com.amazonaws:aws-java-sdk-s3:1.12.470'
+
+	// Spring AI
+	implementation platform("org.springframework.ai:spring-ai-bom:1.1.2")
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+	implementation 'org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc'
+	implementation 'org.springframework.ai:spring-ai-advisors-vector-store'
+	implementation 'com.openai:openai-java:4.13.0'
+	implementation("com.squareup.okhttp3:okhttp:4.12.0")
+	implementation("com.fasterxml.jackson.core:jackson-databind")
+
+
+	// Document Reader
+	implementation 'org.springframework.ai:spring-ai-markdown-document-reader'
+	implementation 'org.springframework.ai:spring-ai-pdf-document-reader'
+	implementation 'org.springframework.ai:spring-ai-tika-document-reader'
+
+	// SendGrid(Email)
+	implementation 'com.sendgrid:sendgrid-java:4.4.1'
+
+	// Validation (유효성 검사)
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// jOOQ
+	implementation 'org.springframework.boot:spring-boot-starter-jooq'
+
+	// WebSocket
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+	// Aho-Corasick (forbidden word matching)
+	implementation 'org.ahocorasick:ahocorasick:0.6.3'
+
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
