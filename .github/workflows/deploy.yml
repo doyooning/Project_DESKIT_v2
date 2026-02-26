@@ -80,8 +80,31 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euo pipefail
-            sudo mkdir -p /var/www/deskit
-            sudo cp -a /home/ubuntu/.deploy/front-dist/. /var/www/deskit/
+            RELEASE_ROOT="/var/www/deskit-releases"
+            RELEASE_ID="$(date +%Y%m%d%H%M%S)-${GITHUB_SHA:-manual}"
+            RELEASE_PATH="${RELEASE_ROOT}/${RELEASE_ID}"
+            LIVE_LINK="/var/www/deskit"
+
+            sudo mkdir -p "$RELEASE_PATH"
+            sudo cp -a /home/ubuntu/.deploy/front-dist/. "$RELEASE_PATH/"
+
+            if [ ! -f "$RELEASE_PATH/index.html" ]; then
+              echo "front-end release is invalid: index.html not found"
+              exit 1
+            fi
+
+            if [ -d "$LIVE_LINK" ] && [ ! -L "$LIVE_LINK" ]; then
+              LEGACY_BACKUP="${LIVE_LINK}-legacy-$(date +%Y%m%d%H%M%S)"
+              sudo mv "$LIVE_LINK" "$LEGACY_BACKUP"
+            fi
+
+            sudo ln -s "$RELEASE_PATH" "${LIVE_LINK}.next"
+            sudo mv -T "${LIVE_LINK}.next" "$LIVE_LINK"
+
+            sudo find "$RELEASE_ROOT" -mindepth 1 -maxdepth 1 -type d \
+              | sort \
+              | head -n -5 \
+              | xargs -r sudo rm -rf
 
       - name: Upload backend jar to app server
         uses: appleboy/scp-action@v0.1.7

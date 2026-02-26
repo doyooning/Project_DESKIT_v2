@@ -272,6 +272,28 @@ export const router = createRouter({
   },
 })
 
+router.onError((error, to) => {
+  const message = String(error?.message ?? '')
+  const isChunkLoadError =
+    message.includes('Failed to fetch dynamically imported module') ||
+    message.includes('Importing a module script failed')
+
+  if (!isChunkLoadError) {
+    return
+  }
+
+  const reloadGuardKey = 'deskit:chunk-reload'
+  const alreadyReloaded = sessionStorage.getItem(reloadGuardKey) === '1'
+  if (alreadyReloaded) {
+    sessionStorage.removeItem(reloadGuardKey)
+    return
+  }
+
+  sessionStorage.setItem(reloadGuardKey, '1')
+  const separator = to.fullPath.includes('?') ? '&' : '?'
+  window.location.replace(`${to.fullPath}${separator}__reload=${Date.now()}`)
+})
+
 const hasPendingAdminVerification = async (): Promise<boolean> => {
   try {
     const response = await fetch('/api/admin/auth/pending', {
