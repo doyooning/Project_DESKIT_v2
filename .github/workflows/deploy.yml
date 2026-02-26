@@ -68,9 +68,21 @@ jobs:
           username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "front/dist/*"
-          target: "/var/www/deskit"
+          target: "/home/ubuntu/.deploy/front-dist"
           strip_components: 2
           rm: true
+
+      - name: Sync front-end files to nginx directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            sudo mkdir -p /var/www/deskit
+            sudo rm -rf /var/www/deskit/*
+            sudo cp -a /home/ubuntu/.deploy/front-dist/. /var/www/deskit/
 
       - name: Upload backend jar to app server
         uses: appleboy/scp-action@v0.1.7
