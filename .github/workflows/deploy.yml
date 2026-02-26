@@ -81,7 +81,6 @@ jobs:
           script: |
             set -euo pipefail
             sudo mkdir -p /var/www/deskit
-            sudo rm -rf /var/www/deskit/*
             sudo cp -a /home/ubuntu/.deploy/front-dist/. /var/www/deskit/
 
       - name: Upload backend jar to app server
