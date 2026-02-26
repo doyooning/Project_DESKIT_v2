@@ -111,9 +111,20 @@ jobs:
               docker build --no-cache -t deskit:latest .
               docker compose up -d
             else
-              # Avoid killing the current ssh shell by matching only java -jar process cmdline.
-              pkill -f "java -jar .*deskit\.jar" || true
+              OLD_PIDS="$(ps -eo pid=,args= | awk '/[j]ava -jar deskit\.jar/ {print $1}')"
+              if [ -n "$OLD_PIDS" ]; then
+                echo "$OLD_PIDS" | xargs -r kill -TERM
+                sleep 2
+                for pid in $OLD_PIDS; do
+                  if kill -0 "$pid" 2>/dev/null; then
+                    kill -KILL "$pid" || true
+                  fi
+                done
+              fi
               nohup java -jar deskit.jar > app.log 2>&1 &
+              sleep 3
+              NEW_PIDS="$(ps -eo pid=,args= | awk '/[j]ava -jar deskit\.jar/ {print $1}')"
+              [ -n "$NEW_PIDS" ] || (echo "deskit.jar failed to start"; tail -n 200 app.log; exit 1)
             fi
 
       - name: Reload nginx (web server)
