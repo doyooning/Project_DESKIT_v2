@@ -49,6 +49,9 @@ jobs:
             settings.gradle
             gradle/wrapper/gradle-wrapper.properties
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Build backend jar
         run: ./gradlew clean bootJar
 
