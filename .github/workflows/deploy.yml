@@ -111,7 +111,8 @@ jobs:
               docker build --no-cache -t deskit:latest .
               docker compose up -d
             else
-              pkill -f "deskit.jar" || true
+              # Avoid killing the current ssh shell by matching only java -jar process cmdline.
+              pkill -f "java -jar .*deskit\.jar" || true
               nohup java -jar deskit.jar > app.log 2>&1 &
             fi
 
