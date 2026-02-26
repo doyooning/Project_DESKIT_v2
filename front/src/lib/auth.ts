@@ -26,7 +26,7 @@ type SessionPayload = Partial<AuthUser> & {
 }
 
 const webBase = import.meta.env.VITE_WEB_BASE_URL || window.location.origin
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 let sessionUser: AuthUser | null = null
 
 const clearStoredAuthTokens = (): void => {

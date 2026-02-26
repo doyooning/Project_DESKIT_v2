@@ -22,7 +22,7 @@ const emit = defineEmits<{
   (e: 'update:tags', value: string[]): void
 }>()
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const buildAuthHeaders = (): Record<string, string> => {
   const access = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')

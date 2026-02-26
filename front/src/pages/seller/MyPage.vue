@@ -6,7 +6,7 @@ import PageHeader from '../../components/PageHeader.vue'
 import { getAuthUser, normalizeDisplayName, requestLogout, requestWithdraw } from '../../lib/auth'
 
 const router = useRouter()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 type Manager = {
   id: number

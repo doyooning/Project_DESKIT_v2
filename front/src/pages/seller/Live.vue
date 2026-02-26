@@ -160,7 +160,7 @@ const loopEnabled = ref<Record<LoopKind, boolean>>({
   scheduled: false,
   vod: false,
 })
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 const sseSource = ref<EventSource | null>(null)
 const sseConnected = ref(false)
 const sseRetryCount = ref(0)

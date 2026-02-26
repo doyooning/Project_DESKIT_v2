@@ -72,7 +72,7 @@ const companyToDate = ref('')
 const showCompanyModal = ref(false)
 const selectedCompany = ref<AdminCompany | null>(null)
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 const users = ref<AdminUser[]>([])
 const page = ref(0)
 const size = 10

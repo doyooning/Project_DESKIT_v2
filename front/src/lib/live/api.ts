@@ -1,6 +1,6 @@
 import {http} from '../../api/http'
 import {parseLiveDate} from './utils'
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 export type BroadcastCategory = {
   id: number

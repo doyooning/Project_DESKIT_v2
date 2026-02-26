@@ -25,7 +25,7 @@ const sseSource = ref<EventSource | null>(null)
 const sseRetryTimer = ref<number | null>(null)
 const sseRetryCount = ref(0)
 const refreshTimer = ref<number | null>(null)
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const buildProductItems = (items: Awaited<ReturnType<typeof listPopularProducts>>) =>
   items.map((item) => ({

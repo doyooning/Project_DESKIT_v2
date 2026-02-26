@@ -32,7 +32,7 @@ import { computeLifecycleStatus, getBroadcastStatusLabel, getScheduledEndMs, nor
 const route = useRoute()
 const router = useRouter()
 const { now } = useNow(1000)
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 // const wsBase = resolveWsBase(apiBase)
 const sockJsUrl = resolveSockJsUrl(apiBase)
 const sseSource = ref<EventSource | null>(null)

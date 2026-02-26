@@ -13,7 +13,7 @@ import {
 } from '../../composables/useSellerProducts'
 
 const router = useRouter()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const editorRef = ref<HTMLDivElement | null>(null)
 const detailHtml = ref('')

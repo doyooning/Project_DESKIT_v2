@@ -17,7 +17,7 @@ type VerifyResponse = {
   role: string
 }
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 const router = useRouter()
 const pending = ref<PendingAdmin | null>(null)
 

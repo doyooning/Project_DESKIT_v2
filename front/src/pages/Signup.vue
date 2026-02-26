@@ -35,7 +35,7 @@ type Policy = {
   content: string
 }
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 const oauthBase = import.meta.env.VITE_OAUTH_BASE_URL || window.location.origin
 const pending = ref<PendingSignup | null>(null)
 const signupToken = ref('')

@@ -93,6 +93,14 @@ jobs:
               exit 1
             fi
 
+            if [ -L "$LIVE_LINK" ] || [ -d "$LIVE_LINK" ]; then
+              if [ -d "$LIVE_LINK/assets" ]; then
+                sudo mkdir -p "$RELEASE_PATH/assets"
+                # Keep previous hashed chunks to tolerate stale index cache.
+                sudo cp -an "$LIVE_LINK/assets/." "$RELEASE_PATH/assets/" || true
+              fi
+            fi
+
             if [ -d "$LIVE_LINK" ] && [ ! -L "$LIVE_LINK" ]; then
               LEGACY_BACKUP="${LIVE_LINK}-legacy-$(date +%Y%m%d%H%M%S)"
               sudo mv "$LIVE_LINK" "$LEGACY_BACKUP"

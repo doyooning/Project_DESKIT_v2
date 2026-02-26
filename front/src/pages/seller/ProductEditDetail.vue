@@ -6,7 +6,7 @@ import PageHeader from '../../components/PageHeader.vue'
 
 const router = useRouter()
 const route = useRoute()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const editorRef = ref<HTMLDivElement | null>(null)
 const detailHtml = ref('')

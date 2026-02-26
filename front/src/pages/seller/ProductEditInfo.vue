@@ -8,7 +8,7 @@ import LiveImageCropModal from '../../components/LiveImageCropModal.vue'
 
 const router = useRouter()
 const route = useRoute()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 type ProductStatus = 'DRAFT' | 'READY' | 'ON_SALE' | 'LIMITED_SALE' | 'SOLD_OUT' | 'PAUSED' | 'HIDDEN'
 

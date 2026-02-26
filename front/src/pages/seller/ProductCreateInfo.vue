@@ -16,7 +16,7 @@ type ImageSlot = {
 
 const route = useRoute()
 const router = useRouter()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const name = ref('')
 const shortDesc = ref('')
