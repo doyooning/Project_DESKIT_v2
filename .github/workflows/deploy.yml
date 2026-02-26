@@ -1,0 +1,100 @@
+name: Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: dynii.deskit.o-r.kr
+      EC2_USER: ubuntu
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install front-end dependencies
+        working-directory: front
+        run: npm ci
+
+      - name: Build front-end
+        working-directory: front
+        run: npm run build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "17"
+          cache: gradle
+
+      - name: Build backend jar
+        run: ./gradlew clean bootJar
+
+      - name: Prepare backend jar
+        run: |
+          set -euo pipefail
+          JAR_PATH="$(ls build/libs/*.jar | head -n 1)"
+          cp "$JAR_PATH" build/libs/deskit.jar
+
+      - name: Upload front-end dist to web server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "front/dist/*"
+          target: "/var/www/deskit"
+          strip_components: 2
+          rm: true
+
+      - name: Upload backend jar to app server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "build/libs/deskit.jar"
+          target: "/home/ubuntu/app"
+          strip_components: 2
+
+      - name: Restart backend service (app server)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /srv/livecommerce
+            docker compose down
+            docker build --no-cache -t deskit:latest .
+            docker compose up -d
+
+      - name: Reload nginx (web server)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            sudo nginx -t
+            sudo nginx -s reload

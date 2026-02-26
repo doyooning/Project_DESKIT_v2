@@ -272,6 +272,17 @@ export const router = createRouter({
   },
 })
 
+const hasPendingAdminVerification = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/admin/auth/pending', {
+      credentials: 'include',
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 router.beforeEach(async (to) => {
   let loggedIn = isLoggedIn()
   const isSellerPath = to.path.startsWith('/seller')
@@ -298,11 +309,21 @@ router.beforeEach(async (to) => {
   if (isSellerPath && loggedIn && !isSeller()) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  if (loggedIn && to.path === '/admin/verify') {
-    return { path: '/admin' }
+  if (isAdminVerify) {
+    const pending = await hasPendingAdminVerification()
+    if (pending) {
+      return true
+    }
+    if (loggedIn && isAdmin()) {
+      return { path: '/admin' }
+    }
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
-  if (to.path === '/admin/verify') {
-    return true
+  if (isAdminPath) {
+    const pending = await hasPendingAdminVerification()
+    if (pending) {
+      return { path: '/admin/verify' }
+    }
   }
   if (to.path.startsWith('/admin')) {
     if (!loggedIn || !isAdmin()) {
@@ -320,5 +341,3 @@ router.beforeEach(async (to) => {
   }
   return true
 })
-
-

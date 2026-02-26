@@ -70,6 +70,7 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 response.sendRedirect(buildWebUrl("/login"));
                 return;
             }
+            clearAuthCookies(response);
             adminAuthService.startSession(admin, request.getSession(true));
             response.sendRedirect(buildWebUrl("/admin/verify"));
             return;
@@ -97,6 +98,20 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         cookie.setPath("/");
         cookie.setHttpOnly(true);
 
+        return cookie;
+    }
+
+    private void clearAuthCookies(HttpServletResponse response) {
+        response.addCookie(expireCookie("access"));
+        response.addCookie(expireCookie("refresh"));
+    }
+
+    private Cookie expireCookie(String key) {
+        Cookie cookie = new Cookie(key, null);
+        cookie.setMaxAge(0);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
         return cookie;
     }
 
