@@ -150,6 +150,8 @@ public class BroadcastService {
     public Long createBroadcast(Long sellerId, BroadcastCreateRequest request) {
         String lockKey = "lock:seller:" + sellerId + ":broadcast_create";
         String slotLockKey = "lock:broadcast_slot:" + request.getScheduledAt().toString();
+        String dbSlotLockKey = buildDbSlotLockKey(request.getScheduledAt());
+        boolean dbSlotLocked = false;
 
         if (!Boolean.TRUE.equals(redisService.acquireLock(lockKey, 3000))) {
             throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
@@ -159,15 +161,17 @@ public class BroadcastService {
             if (!Boolean.TRUE.equals(redisService.acquireLock(slotLockKey, 3000))) {
                 throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
             }
+            if (!acquireDbSlotLock(dbSlotLockKey, 3)) {
+                throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
+            }
+            dbSlotLocked = true;
+
             long reservedCount = broadcastRepository.countBySellerIdAndStatus(sellerId, BroadcastStatus.RESERVED);
             if (reservedCount >= 7) {
                 throw new BusinessException(ErrorCode.RESERVATION_LIMIT_EXCEEDED);
             }
 
-            long slotCount = broadcastRepository.countByTimeSlot(request.getScheduledAt(), request.getScheduledAt().plusMinutes(30));
-            if (slotCount >= 3) {
-                throw new BusinessException(ErrorCode.BROADCAST_SLOT_FULL);
-            }
+            ensureSlotCapacityForReservation(request.getScheduledAt());
 
             Seller seller = sellerRepository.findById(sellerId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.SELLER_NOT_FOUND));
@@ -189,10 +193,14 @@ public class BroadcastService {
             Broadcast saved = broadcastRepository.save(broadcast);
             saveBroadcastProducts(sellerId, saved, request.getProducts());
             saveQcards(saved, request.getQcards());
+            ensureSlotCapacityAfterReservation(request.getScheduledAt());
 
             log.info("방송 생성 완료: id={}", saved.getBroadcastId());
             return saved.getBroadcastId();
         } finally {
+            if (dbSlotLocked) {
+                releaseDbSlotLock(dbSlotLockKey);
+            }
             redisService.releaseLock(slotLockKey);
             redisService.releaseLock(lockKey);
         }
@@ -218,25 +226,41 @@ public class BroadcastService {
             LocalDateTime currentScheduledAt = broadcast.getScheduledAt();
             if (nextScheduledAt != null && (currentScheduledAt == null || !currentScheduledAt.equals(nextScheduledAt))) {
                 String slotLockKey = "lock:broadcast_slot:" + nextScheduledAt.toString();
+                String dbSlotLockKey = buildDbSlotLockKey(nextScheduledAt);
+                boolean dbSlotLocked = false;
                 if (!Boolean.TRUE.equals(redisService.acquireLock(slotLockKey, 3000))) {
                     throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
                 }
                 try {
-                    long slotCount = broadcastRepository.countByTimeSlot(nextScheduledAt, nextScheduledAt.plusMinutes(30));
-                    if (slotCount >= 3) {
-                        throw new BusinessException(ErrorCode.BROADCAST_SLOT_FULL);
+                    if (!acquireDbSlotLock(dbSlotLockKey, 3)) {
+                        throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
                     }
+                    dbSlotLocked = true;
+
+                    ensureSlotCapacityForReservation(nextScheduledAt);
+                    broadcast.updateBroadcastInfo(
+                            category, request.getTitle(), request.getNotice(),
+                            request.getScheduledAt(), request.getThumbnailUrl(),
+                            request.getWaitScreenUrl(), request.getBroadcastLayout()
+                    );
+                    updateBroadcastProducts(sellerId, broadcast, request.getProducts());
+                    updateQcards(broadcast, request.getQcards());
+                    ensureSlotCapacityAfterReservation(nextScheduledAt);
                 } finally {
+                    if (dbSlotLocked) {
+                        releaseDbSlotLock(dbSlotLockKey);
+                    }
                     redisService.releaseLock(slotLockKey);
                 }
+            } else {
+                broadcast.updateBroadcastInfo(
+                        category, request.getTitle(), request.getNotice(),
+                        request.getScheduledAt(), request.getThumbnailUrl(),
+                        request.getWaitScreenUrl(), request.getBroadcastLayout()
+                );
+                updateBroadcastProducts(sellerId, broadcast, request.getProducts());
+                updateQcards(broadcast, request.getQcards());
             }
-            broadcast.updateBroadcastInfo(
-                    category, request.getTitle(), request.getNotice(),
-                    request.getScheduledAt(), request.getThumbnailUrl(),
-                    request.getWaitScreenUrl(), request.getBroadcastLayout()
-            );
-            updateBroadcastProducts(sellerId, broadcast, request.getProducts());
-            updateQcards(broadcast, request.getQcards());
         } else {
             broadcast.updateLiveBroadcastInfo(
                     category, request.getTitle(), request.getNotice(),
@@ -269,7 +293,7 @@ public class BroadcastService {
 
             validateTransition(broadcast.getStatus(), BroadcastStatus.DELETED);
             broadcast.deleteBroadcast();
-            log.info("방송 취소 처리 완료: id={}, status={}", broadcastId, broadcast.getStatus());
+            log.info("諛⑹넚 痍⑥냼 泥섎━ ?꾨즺: id={}, status={}", broadcastId, broadcast.getStatus());
             sseService.notifyBroadcastUpdate(broadcastId, "BROADCAST_CANCELED", "deleted");
         } finally {
             redisService.releaseLock(lockKey);
@@ -2269,6 +2293,34 @@ public class BroadcastService {
                                 .map(SalesMetric::salesQuantity)
                                 .orElse(0))
                 ));
+    }
+
+    private void ensureSlotCapacityForReservation(LocalDateTime scheduledAt) {
+        long slotCount = broadcastRepository.countByTimeSlot(scheduledAt, scheduledAt.plusMinutes(30));
+        if (slotCount >= 3) {
+            throw new BusinessException(ErrorCode.BROADCAST_SLOT_FULL);
+        }
+    }
+    private void ensureSlotCapacityAfterReservation(LocalDateTime scheduledAt) {
+        long slotCount = broadcastRepository.countByTimeSlot(scheduledAt, scheduledAt.plusMinutes(30));
+        if (slotCount > 3) {
+            throw new BusinessException(ErrorCode.BROADCAST_SLOT_FULL);
+        }
+    }
+    private String buildDbSlotLockKey(LocalDateTime scheduledAt) {
+        return "db-lock:broadcast-slot:" + scheduledAt;
+    }
+    private boolean acquireDbSlotLock(String lockKey, int timeoutSeconds) {
+        Integer result = dsl.resultQuery("SELECT GET_LOCK(?, ?)", lockKey, timeoutSeconds)
+                .fetchOne(0, Integer.class);
+        return result != null && result == 1;
+    }
+    private void releaseDbSlotLock(String lockKey) {
+        try {
+            dsl.resultQuery("SELECT RELEASE_LOCK(?)", lockKey).fetch();
+        } catch (Exception e) {
+            log.warn("DB slot lock release failed: key={}, message={}", lockKey, e.getMessage());
+        }
     }
 
     private void disableSslVerification() {
