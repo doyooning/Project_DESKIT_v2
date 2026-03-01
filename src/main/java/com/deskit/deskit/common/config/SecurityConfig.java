@@ -189,6 +189,7 @@ public class SecurityConfig {
                                 "/chat",
                                 "/chat/**",
                                 "/api/reissue",
+                                "/api/internal/test-auth/**",
                                 "/api/home/**",
                                 "/api/broadcasts/**",
                                 "/api/categories",
