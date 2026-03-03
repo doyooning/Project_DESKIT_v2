@@ -1,6 +1,8 @@
 package com.deskit.deskit.livehost.service;
 
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -16,6 +19,7 @@ import java.util.stream.Collectors;
 public class RedisService {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final RedissonClient redissonClient;
 
     public String getRealtimeViewKey(Long broadcastId) {
         return "broadcast:" + broadcastId + ":active_uv";
@@ -114,12 +118,20 @@ public class RedisService {
     }
 
     public Boolean acquireLock(String key, long timeoutMillis) {
-        return redisTemplate.opsForValue()
-                .setIfAbsent(key, "LOCKED", Duration.ofMillis(timeoutMillis));
+        RLock lock = redissonClient.getLock(key);
+        try {
+            return lock.tryLock(0, timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     public void releaseLock(String key) {
-        redisTemplate.delete(key);
+        RLock lock = redissonClient.getLock(key);
+        if (lock.isHeldByCurrentThread()) {
+            lock.unlock();
+        }
     }
 
     public boolean setIfAbsent(String key, String value, Duration ttl) {

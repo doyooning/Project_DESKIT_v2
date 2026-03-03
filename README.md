@@ -1,6 +1,7 @@
 ## 목차
 
 - [프로젝트 개요](#프로젝트-개요)
+- [서버 구조도 및 기능 모식도](#서버-구조도-및-기능-모식도)
 - [주요 개선/보완 사항](#주요-개선보완-사항)
 - [트러블슈팅](#트러블슈팅)
 
@@ -13,7 +14,18 @@
 - 주요 기능:
   [DESKIT_주요기능](https://drive.google.com/file/d/1oxaB-RDMtOUjrHZP19cEsVKlyyFntf3W/view?usp=sharing)
 
-> [DESKIT 프로젝트 원본](https://github.com/doyooning/Project_DESKIT)
+> [DESKIT 프로젝트 리포지토리](https://github.com/doyooning/Project_DESKIT)
+
+---
+
+## 서버 구조도 및 기능 모식도
+### 1. 서버 구조도
+![](https://velog.velcdn.com/images/doyooning/post/75643ad2-5e3b-4b6b-a17f-915374fc16b8/image.jpg)
+
+### 2. 챗봇 기능 모식도
+
+### 3. 라이브 방송 기능 모식도
+
 
 ---
 
