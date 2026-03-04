@@ -23,9 +23,10 @@
 ![](https://velog.velcdn.com/images/doyooning/post/75643ad2-5e3b-4b6b-a17f-915374fc16b8/image.jpg)
 
 ### 2. 챗봇 기능 모식도
+![](https://velog.velcdn.com/images/doyooning/post/c79b1b38-101d-4b09-97c2-4df82f21c23d/image.jpg)
 
 ### 3. 라이브 방송 기능 모식도
-
+![](https://velog.velcdn.com/images/doyooning/post/0a13aef5-3289-4de3-abf2-a40e0f0e996a/image.jpg)
 
 ---
 
@@ -41,8 +42,8 @@
 
 
 ### AI/RAG 기능 개선
-- RAG 임베딩 대상/청크 전략을 재설정하고, 답변 시 참고 정보 로깅을 추가해 추적 가능성을 높였습니다.
-- 유사도 Threshold 를 조정해 응답 정확도와 관련도 균형을 개선했습니다.
+- RAG 임베딩 청크 전략을 청킹 크기 500단어로 재설정하고, 답변 시 참고 인덱스 로깅을 추가해 추적 가능성을 높였습니다.
+- 유사도 Threshold를 0.75에서 0.7로 조정해 응답 정확도와 관련도 균형을 개선했습니다.
 
 
 ### 라이브 방송 예약/운영 로직 강화
