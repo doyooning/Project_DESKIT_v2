@@ -2,6 +2,7 @@ import { http } from './http'
 import { endpoints } from './endpoints'
 import { fetchListTextJsonWithRetry } from './api-text-json'
 import { resolveSetupImageUrl } from './setups'
+import { normalizeProductImageUrl } from '../lib/images/productImages'
 
 export type HomePopularProduct = {
   product_id: number
@@ -24,7 +25,10 @@ export const listPopularProducts = async (limit = 8): Promise<HomePopularProduct
     params: { limit },
     validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
   })
-  return payload as HomePopularProduct[]
+  return (payload as HomePopularProduct[]).map((item) => ({
+    ...item,
+    thumbnail_url: normalizeProductImageUrl(item.thumbnail_url ?? undefined),
+  }))
 }
 
 export const listPopularSetups = async (limit = 6): Promise<HomePopularSetup[]> => {

@@ -1,4 +1,5 @@
 import type { ProductStatus } from '../utils/productStatusPolicy'
+import { normalizeProductImageUrl } from './images/productImages'
 
 export type TagCategoryKey = 'space' | 'tone' | 'situation' | 'mood'
 export type ProductTags = Record<TagCategoryKey, string[]>
@@ -468,5 +469,5 @@ export const productsData: DbProduct[] = [
   tagsFlat: flattenTags(product.tags),
   popularity: product.popularity ?? 0,
   salesVolume: product.salesVolume ?? 0,
-  imageUrl: product.imageUrl ?? '/placeholder-product.jpg',
+  imageUrl: normalizeProductImageUrl(product.imageUrl ?? '/placeholder-product.jpg'),
 }))

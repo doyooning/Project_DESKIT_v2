@@ -1,13 +1,59 @@
 export const PLACEHOLDER_IMAGE = '/placeholder-product.jpg'
 
+const ensureTrailingSlash = (value: string) => (value.endsWith('/') ? value : `${value}/`)
+
+const getProductImageBaseUrl = () => {
+  const base =
+    import.meta.env.VITE_PRODUCT_IMAGE_BASE_URL ??
+    'https://dynii-bucket.s3.amazonaws.com/deskit/public/'
+  return ensureTrailingSlash(base)
+}
+
 export const getStorageBaseUrl = () => {
   const base = import.meta.env.VITE_STORAGE_BASE_URL ??
     'https://kr.object.ncloudstorage.com/live-commerce-bucket/'
-  return base.endsWith('/') ? base : `${base}/`
+  return ensureTrailingSlash(base)
+}
+
+const hasImageLikePath = (value: string) =>
+  /\.(avif|bmp|gif|jpe?g|png|svg|webp)(\?.*)?$/i.test(value)
+
+export const normalizeProductImageUrl = (rawValue?: string | null): string => {
+  const value = String(rawValue ?? '').trim()
+  if (!value) return PLACEHOLDER_IMAGE
+  if (value === PLACEHOLDER_IMAGE || value === '/placeholder-product.jpg') return PLACEHOLDER_IMAGE
+  if (
+    value.startsWith('http://') ||
+    value.startsWith('https://') ||
+    value.startsWith('data:') ||
+    value.startsWith('blob:')
+  ) {
+    return value
+  }
+  if (value.startsWith('/live-commerce-bucket/')) {
+    return `${getStorageBaseUrl()}${value.replace(/^\/+live-commerce-bucket\/+/, '')}`
+  }
+  if (value.startsWith('live-commerce-bucket/')) {
+    return `${getStorageBaseUrl()}${value.replace(/^live-commerce-bucket\/+/, '')}`
+  }
+  if (value.startsWith('seller_')) {
+    return `${getStorageBaseUrl()}${value.replace(/^\/+/, '')}`
+  }
+  if (value.startsWith('/deskit/public/')) {
+    return `${getProductImageBaseUrl()}${value.replace(/^\/+deskit\/+public\/+/, '')}`
+  }
+  if (value.startsWith('deskit/public/')) {
+    return `${getProductImageBaseUrl()}${value.replace(/^deskit\/+public\/+/, '')}`
+  }
+  if (value.startsWith('/')) {
+    const trimmed = value.replace(/^\/+/, '')
+    return hasImageLikePath(trimmed) ? `${getProductImageBaseUrl()}${trimmed}` : value
+  }
+  return hasImageLikePath(value) ? `${getProductImageBaseUrl()}${value}` : value
 }
 
 export const extractImageUrl = (image: any): string => {
-  if (typeof image === 'string') return image
+  if (typeof image === 'string') return normalizeProductImageUrl(image)
   const direct =
     image?.product_image_url ??
     image?.productImageUrl ??
@@ -19,11 +65,10 @@ export const extractImageUrl = (image: any): string => {
     image?.thumbUrl ??
     image?.thumbnail_url ??
     image?.thumbnailUrl
-  if (direct) return direct
+  if (direct) return normalizeProductImageUrl(direct)
   const storedFileName = image?.stored_file_name ?? image?.storedFileName
   if (!storedFileName) return ''
-  const trimmed = String(storedFileName).replace(/^\/+/, '')
-  return `${getStorageBaseUrl()}${trimmed}`
+  return normalizeProductImageUrl(String(storedFileName))
 }
 
 export const resolveImageList = (raw: any): string[] => {
@@ -49,30 +94,15 @@ export const resolvePrimaryImage = (raw: any): string => {
     raw?.imageUrl ??
     raw?.thumbnail_url ??
     raw?.thumbnailUrl
-  if (direct) return direct
+  if (direct) return normalizeProductImageUrl(direct)
   const storedFileName = raw?.stored_file_name ?? raw?.storedFileName
-  if (storedFileName) {
-    const trimmed = String(storedFileName).replace(/^\/+/, '')
-    return `${getStorageBaseUrl()}${trimmed}`
-  }
+  if (storedFileName) return normalizeProductImageUrl(String(storedFileName))
   const list = resolveImageList(raw)
   return list[0] ?? PLACEHOLDER_IMAGE
 }
 
 export const resolveProductImageUrlFromRaw = (raw: any): string => {
-  const primary = resolvePrimaryImage(raw) || PLACEHOLDER_IMAGE
-  if (primary.startsWith('http://') || primary.startsWith('https://')) return primary
-  if (primary.startsWith('/live-commerce-bucket/')) {
-    return `${getStorageBaseUrl()}${primary.replace(/^\/+live-commerce-bucket\/+/, '')}`
-  }
-  if (primary.startsWith('live-commerce-bucket/')) {
-    return `${getStorageBaseUrl()}${primary.replace(/^live-commerce-bucket\/+/, '')}`
-  }
-  if (primary.startsWith('seller_')) {
-    return `${getStorageBaseUrl()}${primary.replace(/^\/+/, '')}`
-  }
-  if (primary.startsWith('/')) return primary
-  return primary || PLACEHOLDER_IMAGE
+  return normalizeProductImageUrl(resolvePrimaryImage(raw) || PLACEHOLDER_IMAGE)
 }
 
 const warnedImageSources = new Set<string>()
