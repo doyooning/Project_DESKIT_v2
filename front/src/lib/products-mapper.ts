@@ -1,5 +1,6 @@
 import { flattenTags, type DbProduct, type ProductTags } from './products-data'
 import { isSoldOut, isVisibleToUser } from '../utils/productStatusPolicy'
+import { PLACEHOLDER_IMAGE } from './images/productImages'
 
 export type UiProduct = {
   id: string
@@ -47,7 +48,7 @@ export const mapProducts = (items: DbProduct[]): UiProduct[] =>
       return {
         id: String(product.product_id),
         name: product.name,
-        imageUrl: product.imageUrl ?? '/placeholder-product.jpg',
+        imageUrl: product.imageUrl ?? PLACEHOLDER_IMAGE,
         price: product.price,
         originalPrice,
         description: product.short_desc,

@@ -12,6 +12,7 @@ import type { LiveItem } from '../lib/live/types'
 import { parseLiveDate } from '../lib/live/utils'
 import { getAuthUser } from '../lib/auth'
 import { resolveViewerId } from '../lib/live/viewer'
+import { PLACEHOLDER_IMAGE } from '../lib/images/productImages'
 
 const liveItems = ref<LiveItem[]>([])
 const popularProducts = ref<ProductItem[]>([])
@@ -31,7 +32,7 @@ const buildProductItems = (items: Awaited<ReturnType<typeof listPopularProducts>
   items.map((item) => ({
     id: String(item.product_id),
     name: item.name ?? '',
-    imageUrl: item.thumbnail_url || '/placeholder-product.jpg',
+    imageUrl: item.thumbnail_url || PLACEHOLDER_IMAGE,
     price: Number(item.price ?? 0),
     tags: { space: [], tone: [], situation: [], mood: [] },
     isSoldOut: false,

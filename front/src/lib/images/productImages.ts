@@ -1,4 +1,4 @@
-export const PLACEHOLDER_IMAGE = '/placeholder-product.jpg'
+const LEGACY_PLACEHOLDER_IMAGE = '/placeholder-product.jpg'
 
 const ensureTrailingSlash = (value: string) => (value.endsWith('/') ? value : `${value}/`)
 
@@ -8,6 +8,8 @@ const getProductImageBaseUrl = () => {
     'https://dynii-bucket.s3.amazonaws.com/deskit/public/'
   return ensureTrailingSlash(base)
 }
+
+export const PLACEHOLDER_IMAGE = `${getProductImageBaseUrl()}placeholder-product.jpg`
 
 export const getStorageBaseUrl = () => {
   const base = import.meta.env.VITE_STORAGE_BASE_URL ??
@@ -21,7 +23,7 @@ const hasImageLikePath = (value: string) =>
 export const normalizeProductImageUrl = (rawValue?: string | null): string => {
   const value = String(rawValue ?? '').trim()
   if (!value) return PLACEHOLDER_IMAGE
-  if (value === PLACEHOLDER_IMAGE || value === '/placeholder-product.jpg') return PLACEHOLDER_IMAGE
+  if (value === PLACEHOLDER_IMAGE || value === LEGACY_PLACEHOLDER_IMAGE) return PLACEHOLDER_IMAGE
   if (
     value.startsWith('http://') ||
     value.startsWith('https://') ||

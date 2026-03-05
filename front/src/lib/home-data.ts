@@ -2,6 +2,7 @@ import type { ProductTags } from './products-data'
 import { productsData } from './products-data'
 import { isSoldOut, isVisibleToUser } from '../utils/productStatusPolicy'
 import { setupsData } from './setups-data'
+import { PLACEHOLDER_IMAGE } from './images/productImages'
 
 export type SetupItem = {
   id: string
@@ -34,7 +35,7 @@ export const popularProducts: ProductItem[] = productsData
   .map((product) => ({
     id: String(product.product_id),
     name: product.name,
-    imageUrl: product.imageUrl ?? '/placeholder-product.jpg',
+    imageUrl: product.imageUrl ?? PLACEHOLDER_IMAGE,
     price: product.price,
     originalPrice: product.cost_price > product.price ? product.cost_price : undefined,
     tags: product.tags ?? { space: [], tone: [], situation: [], mood: [] },
