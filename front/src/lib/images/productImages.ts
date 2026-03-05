@@ -24,6 +24,15 @@ export const normalizeProductImageUrl = (rawValue?: string | null): string => {
   const value = String(rawValue ?? '').trim()
   if (!value) return PLACEHOLDER_IMAGE
   if (value === PLACEHOLDER_IMAGE || value === LEGACY_PLACEHOLDER_IMAGE) return PLACEHOLDER_IMAGE
+  if (value.startsWith('s3://')) {
+    const match = value.match(/^s3:\/\/([^/]+)\/(.+)$/i)
+    if (match) {
+      const [, bucket, keyRaw] = match
+      const key = (keyRaw ?? '').replace(/^\/+/, '')
+      if (!bucket || !key) return PLACEHOLDER_IMAGE
+      return `https://${bucket}.s3.amazonaws.com/${key}`
+    }
+  }
   if (
     value.startsWith('http://') ||
     value.startsWith('https://') ||
@@ -46,6 +55,9 @@ export const normalizeProductImageUrl = (rawValue?: string | null): string => {
   }
   if (value.startsWith('deskit/public/')) {
     return `${getProductImageBaseUrl()}${value.replace(/^deskit\/+public\/+/, '')}`
+  }
+  if (value.startsWith('dynii-bucket/deskit/public/')) {
+    return `${getProductImageBaseUrl()}${value.replace(/^dynii-bucket\/+deskit\/+public\/+/, '')}`
   }
   if (value.startsWith('/')) {
     const trimmed = value.replace(/^\/+/, '')
