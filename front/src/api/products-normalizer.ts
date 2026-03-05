@@ -11,18 +11,28 @@ const resolveThumbnailUrl = (product: any) => {
     product?.productImages ??
     product?.product_image ??
     product?.images
-  if (!Array.isArray(images)) return undefined
-  const thumbnail = images.find((image) => {
-    const type = image?.image_type ?? image?.imageType
-    const slot = image?.slot_index ?? image?.slotIndex ?? 0
-    return type === 'THUMBNAIL' && Number(slot) === 0
-  })
-  return (
-    thumbnail?.product_image_url ??
-    thumbnail?.productImageUrl ??
-    thumbnail?.image_url ??
-    thumbnail?.imageUrl
-  )
+  if (Array.isArray(images)) {
+    const thumbnail = images.find((image) => {
+      const type = image?.image_type ?? image?.imageType
+      const slot = image?.slot_index ?? image?.slotIndex ?? 0
+      return type === 'THUMBNAIL' && Number(slot) === 0
+    })
+    const thumbnailUrl =
+      thumbnail?.product_image_url ??
+      thumbnail?.productImageUrl ??
+      thumbnail?.image_url ??
+      thumbnail?.imageUrl
+    if (thumbnailUrl) return thumbnailUrl
+  }
+
+  const flatUrls =
+    product?.image_urls ??
+    product?.imageUrls ??
+    product?.product_image_urls ??
+    product?.productImageUrls
+  if (!Array.isArray(flatUrls)) return undefined
+  const first = flatUrls.find((item) => typeof item === 'string' && item.trim().length > 0)
+  return typeof first === 'string' ? first : undefined
 }
 
 export const normalizeProduct = (raw: any): DbProduct => {

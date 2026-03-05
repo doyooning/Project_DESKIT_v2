@@ -78,6 +78,10 @@ export const resolveImageList = (raw: any): string[] => {
     raw?.productImageList,
     raw?.product_image_list,
     raw?.productImageResponses,
+    raw?.image_urls,
+    raw?.imageUrls,
+    raw?.product_image_urls,
+    raw?.productImageUrls,
     raw?.images,
   ].filter(Array.isArray)
   return candidates
