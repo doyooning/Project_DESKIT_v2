@@ -1,3 +1,9 @@
+# DESKIT: 데스크테리어 전문 라이브커머스 플랫폼
+![](https://velog.velcdn.com/images/doyooning/post/7bfae199-972c-44cc-add3-6a81e857afef/image.png)
+
+### 접속 링크
+[DESKIT](https://dynii.deskit.o-r.kr)
+
 ## 목차
 
 - [프로젝트 개요](#프로젝트-개요)
@@ -10,7 +16,7 @@
 ## 프로젝트 개요
 
 - 목표: 신세계I&C 팀 프로젝트 'DESKIT'를 개선 및 보완, 성능 개선
-- 기간: 26.02 ~ 
+- 기간: 26.02 ~ 26.03
 - 주요 기능:
   [DESKIT_주요기능](https://drive.google.com/file/d/1oxaB-RDMtOUjrHZP19cEsVKlyyFntf3W/view?usp=sharing)
 
@@ -53,7 +59,6 @@
 ---
 
 ## 트러블슈팅
-
 
 
 
