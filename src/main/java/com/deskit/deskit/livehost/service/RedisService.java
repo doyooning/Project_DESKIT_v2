@@ -118,9 +118,13 @@ public class RedisService {
     }
 
     public Boolean acquireLock(String key, long timeoutMillis) {
+        return acquireLock(key, 0, timeoutMillis);
+    }
+
+    public Boolean acquireLock(String key, long waitMillis, long leaseMillis) {
         RLock lock = redissonClient.getLock(key);
         try {
-            return lock.tryLock(0, timeoutMillis, TimeUnit.MILLISECONDS);
+            return lock.tryLock(waitMillis, leaseMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;

@@ -113,6 +113,8 @@ public class BroadcastService {
     private static final int RECORDING_START_RETRY_MAX_ATTEMPTS = 10;
     private static final Duration RECORDING_START_RETRY_TTL = Duration.ofMinutes(30);
     private static final Duration RECORDING_START_RETRY_BASE_DELAY = Duration.ofSeconds(5);
+    private static final long SLOT_LOCK_WAIT_MILLIS = 10000L;
+    private static final long SLOT_LOCK_LEASE_MILLIS = 10000L;
 
     private final BroadcastRepository broadcastRepository;
     private final BroadcastProductRepository broadcastProductRepository;
@@ -158,7 +160,11 @@ public class BroadcastService {
         }
 
         try {
-            if (!Boolean.TRUE.equals(redisService.acquireLock(slotLockKey, 3000))) {
+            if (!Boolean.TRUE.equals(redisService.acquireLock(
+                    slotLockKey,
+                    SLOT_LOCK_WAIT_MILLIS,
+                    SLOT_LOCK_LEASE_MILLIS
+            ))) {
                 throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
             }
             if (!acquireDbSlotLock(dbSlotLockKey, 3)) {
@@ -228,7 +234,11 @@ public class BroadcastService {
                 String slotLockKey = "lock:broadcast_slot:" + nextScheduledAt.toString();
                 String dbSlotLockKey = buildDbSlotLockKey(nextScheduledAt);
                 boolean dbSlotLocked = false;
-                if (!Boolean.TRUE.equals(redisService.acquireLock(slotLockKey, 3000))) {
+                if (!Boolean.TRUE.equals(redisService.acquireLock(
+                        slotLockKey,
+                        SLOT_LOCK_WAIT_MILLIS,
+                        SLOT_LOCK_LEASE_MILLIS
+                ))) {
                     throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
                 }
                 try {

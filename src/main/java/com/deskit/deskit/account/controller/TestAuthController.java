@@ -197,6 +197,17 @@ public class TestAuthController {
         return ResponseEntity.ok(result);
     }
 
+    // Alias path under sellers namespace for environments where /members/* is filtered by gateway rules.
+    @PostMapping("/sellers/member-token")
+    public ResponseEntity<Map<String, Object>> issueMemberTokenAlias(
+            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
+            @RequestBody(required = false) MemberTokenIssueRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        return issueMemberToken(providedSecret, request, httpRequest, httpResponse);
+    }
+
     @PostMapping("/members/bootstrap")
     public ResponseEntity<Map<String, Object>> bootstrapMembers(
             @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
@@ -244,6 +255,16 @@ public class TestAuthController {
         result.put("issuedAt", Instant.now().toString());
         log.warn("test-auth bootstrap members count={} ip={}", members.size(), resolveClientIp(httpRequest));
         return ResponseEntity.ok(result);
+    }
+
+    // Alias path under sellers namespace for environments where /members/* is filtered by gateway rules.
+    @PostMapping("/sellers/bootstrap-members")
+    public ResponseEntity<Map<String, Object>> bootstrapMembersAlias(
+            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
+            @RequestBody(required = false) MemberBootstrapRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        return bootstrapMembers(providedSecret, request, httpRequest);
     }
 
     private void validateSecret(String providedSecret) {
