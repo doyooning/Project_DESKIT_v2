@@ -123,15 +123,23 @@ public class JWTFilter extends OncePerRequestFilter {
     // Filter 스킵
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        String servletPath = request.getServletPath();
         String uri = request.getRequestURI();
-        return uri.startsWith("/oauth2/")
-                || uri.startsWith("/login/oauth2/")
-                || uri.startsWith("/login")
-                || uri.startsWith("/api/internal/test-auth/")
-                || uri.startsWith("/internal/test-auth/")
-                || uri.startsWith("/ws/")
-                || uri.startsWith("/ws")
-                || uri.startsWith("/api/ws");
+
+        boolean isOauthOrLogin = servletPath.startsWith("/oauth2/")
+                || servletPath.startsWith("/login/oauth2/")
+                || servletPath.startsWith("/login");
+        boolean isWs = servletPath.startsWith("/ws/")
+                || servletPath.startsWith("/ws")
+                || servletPath.startsWith("/api/ws");
+
+        // requestURI fallback covers deployments with unexpected path rewriting.
+        boolean isTestAuth = servletPath.startsWith("/api/internal/test-auth/")
+                || servletPath.startsWith("/internal/test-auth/")
+                || uri.contains("/api/internal/test-auth/")
+                || uri.contains("/internal/test-auth/");
+
+        return isOauthOrLogin || isWs || isTestAuth;
 
     }
 }
