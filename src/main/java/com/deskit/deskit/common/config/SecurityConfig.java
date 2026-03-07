@@ -161,6 +161,11 @@ public class SecurityConfig {
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write("{\"message\":\"unauthorized\"}");
                 })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\":\"forbidden\",\"path\":\"" + request.getRequestURI() + "\"}");
+                })
         );
 
         //경로별 인가 작업
