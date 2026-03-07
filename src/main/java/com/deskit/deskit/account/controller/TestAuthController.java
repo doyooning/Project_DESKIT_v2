@@ -38,7 +38,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.test-auth", name = "enabled", havingValue = "true")
-@RequestMapping("/api/internal/test-auth")
+@RequestMapping({"/api/internal/test-auth", "/internal/test-auth"})
 public class TestAuthController {
 
     private static final long DEFAULT_ACCESS_TTL_MS = 600_000L;
