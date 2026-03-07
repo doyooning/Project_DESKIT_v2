@@ -70,24 +70,11 @@ public class TestAuthController {
         validateClientIp(httpRequest);
 
         SellerTokenIssueRequest body = request != null ? request : new SellerTokenIssueRequest();
+        Seller seller = resolveSeller(body);
         long accessTtlMs = normalizeTtl(body.getAccessTtlMs(), DEFAULT_ACCESS_TTL_MS);
         long refreshTtlMs = normalizeTtl(body.getRefreshTtlMs(), DEFAULT_REFRESH_TTL_MS);
-        String subjectType = normalizeSubjectType(body.getSubjectType());
-        String loginId;
-        String role;
-        Long sellerId = null;
-        Long memberId = null;
-        if ("MEMBER".equals(subjectType)) {
-            Member member = resolveMemberFromSellerTokenRequest(body);
-            memberId = member.getMemberId();
-            loginId = member.getLoginId();
-            role = "ROLE_MEMBER";
-        } else {
-            Seller seller = resolveSeller(body);
-            sellerId = seller.getSellerId();
-            loginId = seller.getLoginId();
-            role = seller.getRole().name();
-        }
+        String loginId = seller.getLoginId();
+        String role = seller.getRole().name();
         String access = jwtUtil.createJwt("access", loginId, role, accessTtlMs);
         String refresh = jwtUtil.createJwt("refresh", loginId, role, refreshTtlMs);
         refreshRepository.save(loginId, refresh, refreshTtlMs);
@@ -98,8 +85,7 @@ public class TestAuthController {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("issuedAt", Instant.now().toString());
-        result.put("sellerId", sellerId);
-        result.put("memberId", memberId);
+        result.put("sellerId", seller.getSellerId());
         result.put("loginId", loginId);
         result.put("role", role);
         result.put("accessToken", access);
@@ -107,8 +93,8 @@ public class TestAuthController {
         result.put("accessExpiresInMs", accessTtlMs);
         result.put("refreshExpiresInMs", refreshTtlMs);
 
-        log.warn("test-auth token issued sellerId={} memberId={} loginId={} role={} ip={}",
-                sellerId, memberId, loginId, role, resolveClientIp(httpRequest));
+        log.warn("test-auth token issued sellerId={} loginId={} role={} ip={}",
+                seller.getSellerId(), loginId, role, resolveClientIp(httpRequest));
         return ResponseEntity.ok(result);
     }
 
@@ -127,17 +113,6 @@ public class TestAuthController {
         String loginPrefix = StringUtils.hasText(body.getLoginPrefix()) ? body.getLoginPrefix().trim() : "k6-temp-seller";
         String namePrefix = StringUtils.hasText(body.getNamePrefix()) ? body.getNamePrefix().trim() : "K6 Temp Seller";
         boolean createProduct = body.getCreateProduct() == null || body.getCreateProduct();
-        String entityType = normalizeEntityType(body.getEntityType());
-
-        if ("MEMBER".equals(entityType)) {
-            List<Map<String, Object>> members = bootstrapMembersRows(count, startIndex, loginPrefix, namePrefix);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("count", members.size());
-            result.put("members", members);
-            result.put("issuedAt", Instant.now().toString());
-            log.warn("test-auth bootstrap members(via sellers/bootstrap) count={} ip={}", members.size(), resolveClientIp(httpRequest));
-            return ResponseEntity.ok(result);
-        }
 
         List<Map<String, Object>> sellers = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -220,17 +195,6 @@ public class TestAuthController {
         return ResponseEntity.ok(result);
     }
 
-    // Alias path under sellers namespace for environments where /members/* is filtered by gateway rules.
-    @PostMapping("/sellers/member-token")
-    public ResponseEntity<Map<String, Object>> issueMemberTokenAlias(
-            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
-            @RequestBody(required = false) MemberTokenIssueRequest request,
-            HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse
-    ) {
-        return issueMemberToken(providedSecret, request, httpRequest, httpResponse);
-    }
-
     @PostMapping("/members/bootstrap")
     public ResponseEntity<Map<String, Object>> bootstrapMembers(
             @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
@@ -278,16 +242,6 @@ public class TestAuthController {
         result.put("issuedAt", Instant.now().toString());
         log.warn("test-auth bootstrap members count={} ip={}", members.size(), resolveClientIp(httpRequest));
         return ResponseEntity.ok(result);
-    }
-
-    // Alias path under sellers namespace for environments where /members/* is filtered by gateway rules.
-    @PostMapping("/sellers/bootstrap-members")
-    public ResponseEntity<Map<String, Object>> bootstrapMembersAlias(
-            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
-            @RequestBody(required = false) MemberBootstrapRequest request,
-            HttpServletRequest httpRequest
-    ) {
-        return bootstrapMembers(providedSecret, request, httpRequest);
     }
 
     private void validateSecret(String providedSecret) {
@@ -359,64 +313,6 @@ public class TestAuthController {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "memberId or loginId is required");
     }
 
-    private Member resolveMemberFromSellerTokenRequest(SellerTokenIssueRequest request) {
-        if (request.getMemberId() != null) {
-            return memberRepository.findById(request.getMemberId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found"));
-        }
-        if (StringUtils.hasText(request.getLoginId())) {
-            Member member = memberRepository.findByLoginId(request.getLoginId());
-            if (member == null) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found");
-            }
-            return member;
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "memberId or loginId is required");
-    }
-
-    private List<Map<String, Object>> bootstrapMembersRows(int count, int startIndex, String loginPrefix, String namePrefix) {
-        List<Map<String, Object>> members = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            int sequence = startIndex + i;
-            String loginId = loginPrefix + "-" + sequence + "@perf.local";
-
-            Member member = memberRepository.findByLoginId(loginId);
-            if (member == null) {
-                member = Member.builder()
-                        .name(namePrefix + " " + sequence)
-                        .loginId(loginId)
-                        .profile("k6 temp member")
-                        .phone(String.format("010-88%06d", sequence))
-                        .isAgreed(true)
-                        .status(MemberStatus.ACTIVE)
-                        .role("ROLE_MEMBER")
-                        .build();
-                member = memberRepository.save(member);
-            }
-
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("memberId", member.getMemberId());
-            row.put("loginId", member.getLoginId());
-            row.put("role", member.getRole());
-            members.add(row);
-        }
-        return members;
-    }
-
-    private String normalizeEntityType(String entityType) {
-        if (!StringUtils.hasText(entityType)) {
-            return "SELLER";
-        }
-        return "MEMBER".equalsIgnoreCase(entityType.trim()) ? "MEMBER" : "SELLER";
-    }
-
-    private String normalizeSubjectType(String subjectType) {
-        if (!StringUtils.hasText(subjectType)) {
-            return "SELLER";
-        }
-        return "MEMBER".equalsIgnoreCase(subjectType.trim()) ? "MEMBER" : "SELLER";
-    }
-
     private long normalizeTtl(Long value, long defaultValue) {
         if (value == null || value <= 0) {
             return defaultValue;
@@ -465,9 +361,7 @@ public class TestAuthController {
 
     public static class SellerTokenIssueRequest {
         private Long sellerId;
-        private Long memberId;
         private String loginId;
-        private String subjectType;
         private Long accessTtlMs;
         private Long refreshTtlMs;
 
@@ -479,28 +373,12 @@ public class TestAuthController {
             this.sellerId = sellerId;
         }
 
-        public Long getMemberId() {
-            return memberId;
-        }
-
-        public void setMemberId(Long memberId) {
-            this.memberId = memberId;
-        }
-
         public String getLoginId() {
             return loginId;
         }
 
         public void setLoginId(String loginId) {
             this.loginId = loginId;
-        }
-
-        public String getSubjectType() {
-            return subjectType;
-        }
-
-        public void setSubjectType(String subjectType) {
-            this.subjectType = subjectType;
         }
 
         public Long getAccessTtlMs() {
@@ -526,7 +404,6 @@ public class TestAuthController {
         private String loginPrefix;
         private String namePrefix;
         private Boolean createProduct;
-        private String entityType;
 
         public Integer getCount() {
             return count;
@@ -568,13 +445,6 @@ public class TestAuthController {
             this.createProduct = createProduct;
         }
 
-        public String getEntityType() {
-            return entityType;
-        }
-
-        public void setEntityType(String entityType) {
-            this.entityType = entityType;
-        }
     }
 
     public static class MemberTokenIssueRequest {
