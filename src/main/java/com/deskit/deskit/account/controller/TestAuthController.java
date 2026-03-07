@@ -1,9 +1,12 @@
 package com.deskit.deskit.account.controller;
 
+import com.deskit.deskit.account.entity.Member;
 import com.deskit.deskit.account.entity.Seller;
+import com.deskit.deskit.account.enums.MemberStatus;
 import com.deskit.deskit.account.enums.SellerRole;
 import com.deskit.deskit.account.enums.SellerStatus;
 import com.deskit.deskit.account.jwt.JWTUtil;
+import com.deskit.deskit.account.repository.MemberRepository;
 import com.deskit.deskit.account.repository.RefreshRepository;
 import com.deskit.deskit.account.repository.SellerRepository;
 import com.deskit.deskit.product.entity.Product;
@@ -44,6 +47,7 @@ public class TestAuthController {
     private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
     private final SellerRepository sellerRepository;
+    private final MemberRepository memberRepository;
     private final ProductRepository productRepository;
 
     @org.springframework.beans.factory.annotation.Value("${app.cookie.secure:false}")
@@ -152,6 +156,96 @@ public class TestAuthController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/member-token")
+    public ResponseEntity<Map<String, Object>> issueMemberToken(
+            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
+            @RequestBody(required = false) MemberTokenIssueRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        validateSecret(providedSecret);
+        validateClientIp(httpRequest);
+
+        MemberTokenIssueRequest body = request != null ? request : new MemberTokenIssueRequest();
+        Member member = resolveMember(body);
+
+        long accessTtlMs = normalizeTtl(body.getAccessTtlMs(), DEFAULT_ACCESS_TTL_MS);
+        long refreshTtlMs = normalizeTtl(body.getRefreshTtlMs(), DEFAULT_REFRESH_TTL_MS);
+
+        String loginId = member.getLoginId();
+        String role = "ROLE_MEMBER";
+        String access = jwtUtil.createJwt("access", loginId, role, accessTtlMs);
+        String refresh = jwtUtil.createJwt("refresh", loginId, role, refreshTtlMs);
+        refreshRepository.save(loginId, refresh, refreshTtlMs);
+
+        httpResponse.setHeader("access", access);
+        httpResponse.addCookie(createCookie("access", access, (int) (accessTtlMs / 1000)));
+        httpResponse.addCookie(createCookie("refresh", refresh, (int) (refreshTtlMs / 1000)));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("issuedAt", Instant.now().toString());
+        result.put("memberId", member.getMemberId());
+        result.put("loginId", loginId);
+        result.put("role", role);
+        result.put("accessToken", access);
+        result.put("refreshToken", refresh);
+        result.put("accessExpiresInMs", accessTtlMs);
+        result.put("refreshExpiresInMs", refreshTtlMs);
+
+        log.warn("test-auth token issued memberId={} loginId={} role={} ip={}",
+                member.getMemberId(), loginId, role, resolveClientIp(httpRequest));
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/members/bootstrap")
+    public ResponseEntity<Map<String, Object>> bootstrapMembers(
+            @RequestHeader(value = "X-Test-Auth-Secret", required = false) String providedSecret,
+            @RequestBody(required = false) MemberBootstrapRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        validateSecret(providedSecret);
+        validateClientIp(httpRequest);
+
+        MemberBootstrapRequest body = request != null ? request : new MemberBootstrapRequest();
+        int count = normalizeCount(body.getCount());
+        int startIndex = body.getStartIndex() == null ? 1 : Math.max(1, body.getStartIndex());
+        String loginPrefix = StringUtils.hasText(body.getLoginPrefix()) ? body.getLoginPrefix().trim() : "k6-temp-member";
+        String namePrefix = StringUtils.hasText(body.getNamePrefix()) ? body.getNamePrefix().trim() : "K6 Temp Member";
+
+        List<Map<String, Object>> members = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int sequence = startIndex + i;
+            String loginId = loginPrefix + "-" + sequence + "@perf.local";
+
+            Member member = memberRepository.findByLoginId(loginId);
+            if (member == null) {
+                member = Member.builder()
+                        .name(namePrefix + " " + sequence)
+                        .loginId(loginId)
+                        .profile("k6 temp member")
+                        .phone(String.format("010-88%06d", sequence))
+                        .isAgreed(true)
+                        .status(MemberStatus.ACTIVE)
+                        .role("ROLE_MEMBER")
+                        .build();
+                member = memberRepository.save(member);
+            }
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("memberId", member.getMemberId());
+            row.put("loginId", member.getLoginId());
+            row.put("role", member.getRole());
+            members.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("count", members.size());
+        result.put("members", members);
+        result.put("issuedAt", Instant.now().toString());
+        log.warn("test-auth bootstrap members count={} ip={}", members.size(), resolveClientIp(httpRequest));
+        return ResponseEntity.ok(result);
+    }
+
     private void validateSecret(String providedSecret) {
         if (!StringUtils.hasText(configuredSecret)) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "test-auth secret not configured");
@@ -204,6 +298,21 @@ public class TestAuthController {
             return seller;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sellerId or loginId is required");
+    }
+
+    private Member resolveMember(MemberTokenIssueRequest request) {
+        if (request.getMemberId() != null) {
+            return memberRepository.findById(request.getMemberId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found"));
+        }
+        if (StringUtils.hasText(request.getLoginId())) {
+            Member member = memberRepository.findByLoginId(request.getLoginId());
+            if (member == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "member not found");
+            }
+            return member;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "memberId or loginId is required");
     }
 
     private long normalizeTtl(Long value, long defaultValue) {
@@ -336,6 +445,84 @@ public class TestAuthController {
 
         public void setCreateProduct(Boolean createProduct) {
             this.createProduct = createProduct;
+        }
+    }
+
+    public static class MemberTokenIssueRequest {
+        private Long memberId;
+        private String loginId;
+        private Long accessTtlMs;
+        private Long refreshTtlMs;
+
+        public Long getMemberId() {
+            return memberId;
+        }
+
+        public void setMemberId(Long memberId) {
+            this.memberId = memberId;
+        }
+
+        public String getLoginId() {
+            return loginId;
+        }
+
+        public void setLoginId(String loginId) {
+            this.loginId = loginId;
+        }
+
+        public Long getAccessTtlMs() {
+            return accessTtlMs;
+        }
+
+        public void setAccessTtlMs(Long accessTtlMs) {
+            this.accessTtlMs = accessTtlMs;
+        }
+
+        public Long getRefreshTtlMs() {
+            return refreshTtlMs;
+        }
+
+        public void setRefreshTtlMs(Long refreshTtlMs) {
+            this.refreshTtlMs = refreshTtlMs;
+        }
+    }
+
+    public static class MemberBootstrapRequest {
+        private Integer count;
+        private Integer startIndex;
+        private String loginPrefix;
+        private String namePrefix;
+
+        public Integer getCount() {
+            return count;
+        }
+
+        public void setCount(Integer count) {
+            this.count = count;
+        }
+
+        public Integer getStartIndex() {
+            return startIndex;
+        }
+
+        public void setStartIndex(Integer startIndex) {
+            this.startIndex = startIndex;
+        }
+
+        public String getLoginPrefix() {
+            return loginPrefix;
+        }
+
+        public void setLoginPrefix(String loginPrefix) {
+            this.loginPrefix = loginPrefix;
+        }
+
+        public String getNamePrefix() {
+            return namePrefix;
+        }
+
+        public void setNamePrefix(String namePrefix) {
+            this.namePrefix = namePrefix;
         }
     }
 }
