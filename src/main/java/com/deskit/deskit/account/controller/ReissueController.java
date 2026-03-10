@@ -66,6 +66,12 @@ public class ReissueController {
             return new ResponseEntity<>("invalid refresh token", HttpStatus.BAD_REQUEST);
         }
 
+        // Redis 저장소에 존재하는 refresh 토큰인지 검증
+        if (!refreshRepository.existsByRefresh(refresh)) {
+            log.info("refresh token does not exist in store");
+            return new ResponseEntity<>("invalid refresh token", HttpStatus.BAD_REQUEST);
+        }
+
         String username = jwtUtil.getUsername(refresh);
         String role = jwtUtil.getRole(refresh);
 
