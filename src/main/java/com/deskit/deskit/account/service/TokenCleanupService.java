@@ -1,5 +1,7 @@
 package com.deskit.deskit.account.service;
 
+import com.deskit.deskit.account.jwt.JWTUtil;
+import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import com.deskit.deskit.account.repository.RefreshRepository;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,10 +16,13 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class TokenCleanupService {
 
+    private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
+    private final AccessBlacklistRepository accessBlacklistRepository;
 
     public void clear(HttpServletRequest request, HttpServletResponse response) {
         String refresh = extractRefreshToken(request);
+        blacklistAccessToken(request);
 
         if (refresh != null) {
             refreshRepository.deleteByRefresh(refresh);
@@ -43,6 +48,50 @@ public class TokenCleanupService {
                 .orElse(null);
     }
 
+    private void blacklistAccessToken(HttpServletRequest request) {
+        String access = extractAccessToken(request);
+        if (access == null || access.isBlank()) {
+            return;
+        }
+
+        try {
+            if (jwtUtil.isExpired(access)) {
+                return;
+            }
+
+            if (!"access".equals(jwtUtil.getCategory(access))) {
+                return;
+            }
+
+            long ttlMs = jwtUtil.getRemainingMs(access);
+            accessBlacklistRepository.blacklist(access, ttlMs);
+        } catch (Exception ignored) {
+            // Token cleanup should continue even when access token parsing fails.
+        }
+    }
+
+    private String extractAccessToken(HttpServletRequest request) {
+        String auth = request.getHeader("Authorization");
+        if (auth != null && auth.startsWith("Bearer ")) {
+            return auth.substring(7);
+        }
+
+        String legacy = request.getHeader("access");
+        if (legacy != null && !legacy.isBlank()) {
+            return legacy;
+        }
+
+        if (request.getCookies() == null) {
+            return null;
+        }
+
+        return Arrays.stream(request.getCookies())
+                .filter(c -> "access".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
     private Cookie expireCookie(String key) {
         Cookie cookie = new Cookie(key, null);
         cookie.setMaxAge(0);
@@ -51,4 +100,3 @@ public class TokenCleanupService {
         return cookie;
     }
 }
-

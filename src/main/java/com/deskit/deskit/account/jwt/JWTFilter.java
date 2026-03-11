@@ -2,6 +2,7 @@ package com.deskit.deskit.account.jwt;
 
 import com.deskit.deskit.account.dto.UserDTO;
 import com.deskit.deskit.account.oauth.CustomOAuth2User;
+import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -15,14 +16,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 
 @Log4j2
 public class JWTFilter extends OncePerRequestFilter {
 
     private final JWTUtil jwtUtil;
-    public JWTFilter(JWTUtil jwtUtil) {
+    private final AccessBlacklistRepository accessBlacklistRepository;
+
+    public JWTFilter(JWTUtil jwtUtil, AccessBlacklistRepository accessBlacklistRepository) {
         this.jwtUtil = jwtUtil;
+        this.accessBlacklistRepository = accessBlacklistRepository;
     }
 
     @Override
@@ -35,6 +38,12 @@ public class JWTFilter extends OncePerRequestFilter {
         if (accessToken == null || accessToken.isBlank()) {
             log.info("access token is null");
             filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (accessBlacklistRepository.isBlacklisted(accessToken)) {
+            log.info("blacklisted access token");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
 

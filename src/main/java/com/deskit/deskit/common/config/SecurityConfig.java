@@ -5,6 +5,7 @@ import com.deskit.deskit.account.jwt.JWTFilter;
 import com.deskit.deskit.account.jwt.JWTUtil;
 import com.deskit.deskit.account.oauth.CustomOAuth2FailureHandler;
 import com.deskit.deskit.account.oauth.CustomSuccessHandler;
+import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import com.deskit.deskit.account.repository.RefreshRepository;
 import com.deskit.deskit.account.service.CustomOAuth2UserService;
 import com.deskit.deskit.admin.security.AdminSecondFactorFilter;
@@ -44,6 +45,7 @@ public class SecurityConfig {
     private final CustomOAuth2FailureHandler customOAuth2FailureHandler;
     private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
+    private final AccessBlacklistRepository accessBlacklistRepository;
     private final List<String> allowedOrigins;
     private final boolean cookieSecure;
 
@@ -52,6 +54,7 @@ public class SecurityConfig {
                           CustomOAuth2FailureHandler customOAuth2FailureHandler,
                           JWTUtil jwtUtil,
                           RefreshRepository refreshRepository,
+                          AccessBlacklistRepository accessBlacklistRepository,
                           @Value("${app.cors.allowed-origins:http://localhost:5173}") String allowedOriginsRaw,
                           @Value("${app.cookie.secure:false}") boolean cookieSecure) {
 
@@ -60,6 +63,7 @@ public class SecurityConfig {
         this.customOAuth2FailureHandler = customOAuth2FailureHandler;
         this.jwtUtil = jwtUtil;
         this.refreshRepository = refreshRepository;
+        this.accessBlacklistRepository = accessBlacklistRepository;
         this.allowedOrigins = Arrays.stream(allowedOriginsRaw.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
@@ -138,11 +142,11 @@ public class SecurityConfig {
 
         //JWTFilter 추가
         http
-                .addFilterBefore(new JWTFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JWTFilter(jwtUtil, accessBlacklistRepository), UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new AdminSecondFactorFilter(), JWTFilter.class);
 
         http
-                .addFilterBefore(new CustomLogoutFilter(jwtUtil, refreshRepository, cookieSecure), LogoutFilter.class);
+                .addFilterBefore(new CustomLogoutFilter(jwtUtil, refreshRepository, accessBlacklistRepository, cookieSecure), LogoutFilter.class);
 
         //oauth2
         http
