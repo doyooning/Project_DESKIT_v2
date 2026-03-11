@@ -62,6 +62,10 @@
 - 방송 예약 생성 경쟁 상황에서 Redis 락 기반 제어 강화, 슬롯 정합성 검증 보강
   - [트러블슈팅](#트러블슈팅)에서 설명
 
+### 단위 테스트 커버리지 100% 유지
+- 구현한 기능들(account, admin, ai, common, directchat 패키지)에 대한 단위 테스트 커버리지를 100%로 유지
+  ![](https://velog.velcdn.com/images/doyooning/post/e54e8a19-fe70-4e6e-bfc3-652205135b88/image.jpg)
+
 ---
 
 ## 트러블슈팅
