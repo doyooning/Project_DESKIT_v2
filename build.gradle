@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.4.12'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
 }
 
 group = 'com.deskit'
@@ -97,4 +98,79 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy tasks.named('jacocoTestReport')
+}
+
+jacoco {
+	toolVersion = '0.8.12'
+}
+
+def coverageScope = (project.findProperty('coverageScope') ?: 'account').toString()
+
+def coverageIncludesByScope = [
+		'account': [
+				'com/deskit/deskit/account/jwt/**',
+				'com/deskit/deskit/account/controller/ReissueController.class',
+				'com/deskit/deskit/account/service/TokenCleanupService.class',
+				'com/deskit/deskit/account/repository/AccessBlacklistRepository.class',
+				'com/deskit/deskit/account/repository/RefreshRepository.class'
+		],
+		'admin': [
+				'com/deskit/deskit/admin/**/controller/**',
+				'com/deskit/deskit/admin/**/service/**',
+				'com/deskit/deskit/admin/**/repository/**'
+		],
+		'ai': [
+				'com/deskit/deskit/ai/suggest/controller/DeskteriorRecommendationController.class',
+				'com/deskit/deskit/ai/suggest/service/DeskteriorRecommendationService.class'
+		],
+		'common': [
+				'com/deskit/deskit/common/config/WebSocketPrincipal.class',
+				'com/deskit/deskit/common/config/WebSocketAuthHandshakeInterceptor.class',
+				'com/deskit/deskit/common/config/WebSocketAuthHandshakeHandler.class',
+				'com/deskit/deskit/common/config/TimeZoneConfig.class'
+		],
+		'directchat': [
+				'com/deskit/deskit/directchat/**/controller/**',
+				'com/deskit/deskit/directchat/**/service/**',
+				'com/deskit/deskit/directchat/**/repository/**'
+		]
+]
+
+def coverageIncludes = coverageIncludesByScope[coverageScope]
+if (coverageIncludes == null) {
+	throw new GradleException("Unknown coverageScope '${coverageScope}'. Allowed values: ${coverageIncludesByScope.keySet().join(', ')}")
+}
+
+def coverageClassDirs = files(sourceSets.main.output.classesDirs.asFileTree.matching {
+	include coverageIncludes
+})
+
+tasks.named('jacocoTestReport') {
+	dependsOn tasks.named('test')
+	reports {
+		xml.required = true
+		html.required = true
+		csv.required = false
+	}
+	classDirectories.setFrom(coverageClassDirs)
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+	dependsOn tasks.named('test')
+	classDirectories.setFrom(coverageClassDirs)
+	violationRules {
+		rule {
+			limit {
+				counter = 'LINE'
+				value = 'COVEREDRATIO'
+				minimum = 1.0
+			}
+			limit {
+				counter = 'BRANCH'
+				value = 'COVEREDRATIO'
+				minimum = 1.0
+			}
+		}
+	}
 }
