@@ -77,7 +77,10 @@
 
 테스트 결과:
 ![](https://velog.velcdn.com/images/doyooning/post/46369fcc-18cf-446f-89c5-1cff8678a2da/image.jpg)
-- 예약 성공(reserve_success) 2건, 예약 실패(reserve_too_many_requests) 8건으로 기대값과 다름
+- Attempt 1: 예약 성공(reserve_success) 2건, 예약 실패(reserve_too_many_requests) 8건으로 기대값과 다름
+
+![](https://velog.velcdn.com/images/doyooning/post/67a21ac1-cfab-4dc8-b7a9-4c74d68c88f6/image.jpg)
+- Attempt 2: 예약 성공(reserve_success) 5건, 예약 실패(reserve_too_many_requests) 5건으로 기대값과 다름
 
 문제 원인:
 - 락을 선점하는 과정에서 실패하는 요청들이 발생
@@ -124,7 +127,7 @@ private void releaseDbSlotLock(String lockKey) {
 - 락 키 만료, 락 해제 오류 등 까다로운 부분이나 실수할 수 있는 민감한 부분을 Redisson으로 리스크 최소화
 
 최종 상태:
-![](https://velog.velcdn.com/images/doyooning/post/67a21ac1-cfab-4dc8-b7a9-4c74d68c88f6/image.jpg)
+![](https://velog.velcdn.com/images/doyooning/post/52b84765-3037-4000-8d71-a9a0665240ea/image.jpg)
 - 테스트를 반복 실행해도 항상 같은 결과값(예약 성공 3건, 실패 7건) 반환
 
 ---
