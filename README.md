@@ -65,6 +65,7 @@
   - [트러블슈팅](#트러블슈팅)에서 설명
 
 ### 단위 테스트 커버리지 100% 유지
+- JaCoCo를 활용한 패키지(기능) 단위 테스트
 - 구현한 기능들(account, admin, ai, common, directchat 패키지)에 대한 단위 테스트 커버리지를 100%로 유지
   ![](https://velog.velcdn.com/images/doyooning/post/e54e8a19-fe70-4e6e-bfc3-652205135b88/image.jpg)
 
