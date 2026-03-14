@@ -2,6 +2,7 @@ package com.deskit.deskit.account.jwt;
 
 import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,20 @@ class JWTFilterTest {
         when(accessBlacklistRepository.isBlacklisted("access-token")).thenReturn(false);
         when(jwtUtil.isExpired("access-token")).thenReturn(false);
         when(jwtUtil.getCategory("access-token")).thenReturn("refresh");
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void doFilterReturnsUnauthorizedWhenTokenMalformed() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/protected");
+        request.addHeader("Authorization", "Bearer malformed-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(accessBlacklistRepository.isBlacklisted("malformed-token")).thenReturn(false);
+        doThrow(new MalformedJwtException("malformed")).when(jwtUtil).isExpired("malformed-token");
 
         filter.doFilter(request, response, new MockFilterChain());
 

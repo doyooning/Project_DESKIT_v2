@@ -3,6 +3,7 @@ package com.deskit.deskit.account.jwt;
 import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import com.deskit.deskit.account.repository.RefreshRepository;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -98,6 +99,20 @@ class CustomLogoutFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         doThrow(new ExpiredJwtException(null, null, "expired")).when(jwtUtil).isExpired("refresh-token");
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verify(refreshRepository, never()).deleteByRefresh("refresh-token");
+    }
+
+    @Test
+    void doFilterSkipsRefreshDeleteWhenRefreshMalformed() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/logout");
+        request.setCookies(new Cookie("refresh", "refresh-token"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        doThrow(new MalformedJwtException("malformed")).when(jwtUtil).isExpired("refresh-token");
 
         filter.doFilter(request, response, new MockFilterChain());
 

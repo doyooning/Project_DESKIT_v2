@@ -13,6 +13,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +27,9 @@ public class AdminAuthController {
     private final AdminAuthService adminAuthService;
     private final JWTUtil jwtUtil;
     private final RefreshRepository refreshRepository;
+
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
 
     @GetMapping("/pending")
     public ResponseEntity<?> pending(HttpSession session) {
@@ -123,7 +127,7 @@ public class AdminAuthController {
     private Cookie createCookie(String key, String value, int maxAge) {
         Cookie cookie = new Cookie(key, value);
         cookie.setMaxAge(maxAge);
-        // cookie.setSecure(true);
+        cookie.setSecure(cookieSecure);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         return cookie;

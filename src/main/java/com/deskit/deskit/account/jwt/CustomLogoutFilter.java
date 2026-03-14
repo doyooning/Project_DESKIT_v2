@@ -3,6 +3,7 @@ package com.deskit.deskit.account.jwt;
 import com.deskit.deskit.account.repository.AccessBlacklistRepository;
 import com.deskit.deskit.account.repository.RefreshRepository;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
@@ -35,80 +36,66 @@ public class CustomLogoutFilter extends GenericFilterBean {
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-
         doFilter((HttpServletRequest) request, (HttpServletResponse) response, chain);
     }
 
     private void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws IOException, ServletException {
-
-        //path and method verify
         String requestUri = request.getRequestURI();
         if (!requestUri.matches("^\\/logout$")) {
-
             filterChain.doFilter(request, response);
             return;
         }
-        String requestMethod = request.getMethod();
-        if (!requestMethod.equals("POST")) {
 
+        String requestMethod = request.getMethod();
+        if (!"POST".equals(requestMethod)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         blacklistAccessTokenIfPossible(request);
 
-        //get refresh token
         String refresh = null;
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie cookie : cookies) {
-                if (cookie.getName().equals("refresh")) {
+                if ("refresh".equals(cookie.getName())) {
                     refresh = cookie.getValue();
                 }
             }
         }
 
-        //refresh null check
         if (refresh == null) {
-
             clearSessionAndCookies(request, response);
             response.setStatus(HttpServletResponse.SC_OK);
             return;
         }
 
-        //expired check
         try {
             jwtUtil.isExpired(refresh);
+
+            String category = jwtUtil.getCategory(refresh);
+            if (!"refresh".equals(category)) {
+                clearSessionAndCookies(request, response);
+                response.setStatus(HttpServletResponse.SC_OK);
+                return;
+            }
         } catch (ExpiredJwtException e) {
-
-            //response status code
+            clearSessionAndCookies(request, response);
+            response.setStatus(HttpServletResponse.SC_OK);
+            return;
+        } catch (JwtException | IllegalArgumentException e) {
             clearSessionAndCookies(request, response);
             response.setStatus(HttpServletResponse.SC_OK);
             return;
         }
 
-        // 토큰이 refresh인지 확인 (발급시 페이로드에 명시)
-        String category = jwtUtil.getCategory(refresh);
-        if (!category.equals("refresh")) {
-
-            //response status code
-            clearSessionAndCookies(request, response);
-            response.setStatus(HttpServletResponse.SC_OK);
-            return;
-        }
-
-        //DB에 저장되어 있는지 확인
         Boolean isExist = refreshRepository.existsByRefresh(refresh);
         if (!isExist) {
-
-            //response status code
             clearSessionAndCookies(request, response);
             response.setStatus(HttpServletResponse.SC_OK);
             return;
         }
 
-        //로그아웃 진행
-        //Refresh 토큰 DB에서 제거
         refreshRepository.deleteByRefresh(refresh);
 
         clearSessionAndCookies(request, response);

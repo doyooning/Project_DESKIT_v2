@@ -5,10 +5,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,5 +63,23 @@ class RefreshRepositoryTest {
         repository.deleteByRefresh("refresh-token");
 
         verify(redisTemplate).delete("refresh:refresh-token");
+    }
+
+    @Test
+    void rotateReturnsTrueWhenOldRefreshExists() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(1L);
+
+        boolean rotated = repository.rotate("old-refresh", "user1", "new-refresh", 86400000L);
+
+        assertThat(rotated).isTrue();
+    }
+
+    @Test
+    void rotateReturnsFalseWhenOldRefreshMissing() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(0L);
+
+        boolean rotated = repository.rotate("old-refresh", "user1", "new-refresh", 86400000L);
+
+        assertThat(rotated).isFalse();
     }
 }
