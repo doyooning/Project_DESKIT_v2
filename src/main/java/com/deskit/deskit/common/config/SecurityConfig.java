@@ -211,6 +211,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 "/",
+                                "/error",
                                 "/chat",
                                 "/chat/**",
                                 "/api/reissue",

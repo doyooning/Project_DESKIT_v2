@@ -23,15 +23,9 @@ public class SseService {
 
         emitters.put(key, emitter);
 
-        emitter.onCompletion(() -> emitters.remove(key));
-        emitter.onTimeout(() -> {
-            emitters.remove(key);
-            emitter.complete();
-        });
-        emitter.onError((e) -> {
-            emitters.remove(key);
-            emitter.completeWithError(e);
-        });
+        emitter.onCompletion(() -> removeEmitter(key));
+        emitter.onTimeout(() -> removeEmitter(key));
+        emitter.onError((e) -> removeEmitter(key));
 
         sendToClient(emitter, key, "connect", "Connected!");
 
@@ -44,15 +38,9 @@ public class SseService {
         SseEmitter emitter = new SseEmitter(10 * 60 * 1000L);
         emitters.put(key, emitter);
 
-        emitter.onCompletion(() -> emitters.remove(key));
-        emitter.onTimeout(() -> {
-            emitters.remove(key);
-            emitter.complete();
-        });
-        emitter.onError((e) -> {
-            emitters.remove(key);
-            emitter.completeWithError(e);
-        });
+        emitter.onCompletion(() -> removeEmitter(key));
+        emitter.onTimeout(() -> removeEmitter(key));
+        emitter.onError((e) -> removeEmitter(key));
 
         sendToClient(emitter, key, "connect", "Connected!");
 
@@ -133,10 +121,13 @@ public class SseService {
         try {
             emitter.send(SseEmitter.event().id(id).name(name).data(data));
         } catch (IOException | IllegalStateException e) {
-            emitters.remove(id);
-            emitter.complete();
+            removeEmitter(id);
             log.debug("SSE connection closed: key={}, reason={}", id, e.getMessage());
         }
+    }
+
+    private void removeEmitter(String key) {
+        emitters.remove(key);
     }
 
     private String resolveUserId(String userId) {
