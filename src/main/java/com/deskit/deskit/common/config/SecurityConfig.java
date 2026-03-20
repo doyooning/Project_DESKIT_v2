@@ -205,7 +205,7 @@ public class SecurityConfig {
                                 "/*.jpg",
                                 "/*.svg"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS).permitAll()
                         .requestMatchers("/api/orders", "/api/orders/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/payments/toss/**").hasAuthority("ROLE_MEMBER")
                         .requestMatchers("/api/addresses/**").hasAuthority("ROLE_MEMBER")
