@@ -175,6 +175,11 @@ public class SecurityConfig {
         //경로별 인가 작업
         http
                 .authorizeHttpRequests((auth) -> auth
+                        .requestMatchers(
+                                "/actuator/prometheus",
+                                "/actuator/health",
+                                "/actuator/info"
+                        ).permitAll()
                         .requestMatchers("/ws/info/**", "/ws/**", "/ws", "/api/ws/**", "/api/ws", "/api/ws-public/**").permitAll()
                         .requestMatchers(
                                 "/",

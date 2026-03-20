@@ -95,6 +95,9 @@ dependencies {
 	// Aho-Corasick (forbidden word matching)
 	implementation 'org.ahocorasick:ahocorasick:0.6.3'
 
+	// prometheus
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+
 }
 
 tasks.named('test') {
