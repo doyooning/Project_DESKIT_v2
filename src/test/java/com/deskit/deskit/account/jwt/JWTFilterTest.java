@@ -196,6 +196,7 @@ class JWTFilterTest {
         assertThat(exposedFilter.callShouldNotFilter(requestFor("/internal/test-auth/a"))).isTrue();
         assertThat(exposedFilter.callShouldNotFilter(requestFor("/x/api/internal/test-auth/a"))).isTrue();
         assertThat(exposedFilter.callShouldNotFilter(requestFor("/x/internal/test-auth/a"))).isTrue();
+        assertThat(exposedFilter.callShouldNotFilter(requestFor("/actuator/prometheus"))).isTrue();
 
         assertThat(exposedFilter.callShouldNotFilter(requestFor("/api/protected"))).isFalse();
     }
