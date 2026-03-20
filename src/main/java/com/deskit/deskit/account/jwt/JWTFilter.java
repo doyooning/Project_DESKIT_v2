@@ -129,7 +129,9 @@ public class JWTFilter extends OncePerRequestFilter {
                 || uri.contains("/api/internal/test-auth/")
                 || uri.contains("/internal/test-auth/");
         boolean isActuator = servletPath.startsWith("/actuator/")
-                || "/actuator".equals(servletPath);
+                || "/actuator".equals(servletPath)
+                || uri.startsWith("/actuator/")
+                || "/actuator".equals(uri);
 
         return isOauthOrLogin || isWs || isTestAuth || isActuator;
     }

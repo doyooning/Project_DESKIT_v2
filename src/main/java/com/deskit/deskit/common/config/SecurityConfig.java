@@ -90,6 +90,20 @@ public class SecurityConfig {
 
     @Bean
     @Order(0)
+    public SecurityFilterChain actuatorFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/actuator/**")
+                .csrf((auth) -> auth.disable())
+                .formLogin((auth) -> auth.disable())
+                .httpBasic((auth) -> auth.disable())
+                .authorizeHttpRequests((auth) -> auth.anyRequest().permitAll())
+                .sessionManagement((session) -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        return http.build();
+    }
+
+    @Bean
+    @Order(1)
     public SecurityFilterChain testAuthFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/internal/test-auth/**", "/internal/test-auth/**")
@@ -103,7 +117,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Order(1)
+    @Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
@@ -175,11 +189,7 @@ public class SecurityConfig {
         //경로별 인가 작업
         http
                 .authorizeHttpRequests((auth) -> auth
-                        .requestMatchers(
-                                "/actuator/prometheus",
-                                "/actuator/health",
-                                "/actuator/info"
-                        ).permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/ws/info/**", "/ws/**", "/ws", "/api/ws/**", "/api/ws", "/api/ws-public/**").permitAll()
                         .requestMatchers(
                                 "/",
