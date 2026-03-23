@@ -593,6 +593,7 @@ public class BroadcastService {
         try {
             Broadcast broadcast = broadcastRepository.findById(broadcastId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.BROADCAST_NOT_FOUND));
+            LocalDateTime now = LocalDateTime.now();
 
             if (!broadcast.getSeller().getSellerId().equals(sellerId)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN_ACCESS);
@@ -600,8 +601,17 @@ public class BroadcastService {
 
             if (broadcast.getStatus() != BroadcastStatus.ON_AIR
                     && broadcast.getScheduledAt() != null
-                    && LocalDateTime.now().isBefore(broadcast.getScheduledAt())) {
+                    && now.isBefore(broadcast.getScheduledAt())) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+
+            // Scheduler 타이밍 이슈로 RESERVED가 남아 있어도 시작 시각이 되었으면 즉시 READY로 승격한다.
+            if (broadcast.getStatus() == BroadcastStatus.RESERVED
+                    && broadcast.getScheduledAt() != null
+                    && !now.isBefore(broadcast.getScheduledAt())) {
+                validateTransition(broadcast.getStatus(), BroadcastStatus.READY);
+                broadcast.readyBroadcast();
+                sseService.notifyBroadcastUpdate(broadcastId, "BROADCAST_READY", "ready");
             }
 
             if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
