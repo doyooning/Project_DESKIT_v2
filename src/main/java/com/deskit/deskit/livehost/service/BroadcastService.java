@@ -886,13 +886,20 @@ public class BroadcastService {
                 log.warn("Invalid broadcastId on connect: {}", bId);
                 return;
             }
+            Broadcast broadcast = broadcastRepository.findById(broadcastId).orElse(null);
+            if (broadcast == null) {
+                return;
+            }
+            if (!isJoinableGroup(broadcast.getStatus())) {
+                log.debug("Skip live-room connect for non-joinable broadcast: broadcastId={}, status={}",
+                        broadcastId, broadcast.getStatus());
+                return;
+            }
             redisService.enterLiveRoom(broadcastId, vId);
-            broadcastRepository.findById(broadcastId)
-                    .filter(broadcast -> broadcast.getStatus() == BroadcastStatus.ON_AIR)
-                    .ifPresent(broadcast -> {
-                        redisService.updatePeakViewers(broadcastId);
-                        enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, vId);
-                    });
+            if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
+                redisService.updatePeakViewers(broadcastId);
+                enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, vId);
+            }
             Map<String, Object> attrs = accessor.getSessionAttributes();
             if (attrs != null) {
                 attrs.put("broadcastId", bId);

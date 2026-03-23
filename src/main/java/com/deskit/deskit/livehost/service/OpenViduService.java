@@ -114,7 +114,7 @@ public class OpenViduService {
     }
 
     public void startRecording(Long broadcastId) throws OpenViduJavaClientException, OpenViduHttpException {
-        String sessionId = sessionMap.get(broadcastId);
+        String sessionId = resolveActiveSessionId(broadcastId);
         if (sessionId == null) {
             sessionId = createSession(broadcastId);
         }
@@ -142,7 +142,7 @@ public class OpenViduService {
     }
 
     public void stopRecording(Long broadcastId) throws OpenViduJavaClientException, OpenViduHttpException {
-        String sessionId = sessionMap.get(broadcastId);
+        String sessionId = resolveActiveSessionId(broadcastId);
         if (sessionId != null) {
             openVidu.stopRecording(sessionId);
         }
@@ -150,6 +150,14 @@ public class OpenViduService {
 
     public void closeSession(Long broadcastId) {
         String sessionId = sessionMap.remove(broadcastId);
+        if (sessionId == null) {
+            try {
+                sessionId = resolveActiveSessionId(broadcastId);
+            } catch (Exception e) {
+                log.error("Failed to resolve OpenVidu session before close: broadcastId={}, message={}",
+                        broadcastId, e.getMessage());
+            }
+        }
         if (sessionId != null) {
             try {
                 Session session = openVidu.getActiveSession(sessionId);
@@ -183,8 +191,18 @@ public class OpenViduService {
     }
 
     public void forceDisconnect(Long broadcastId, String connectionId) {
-        String sessionId = sessionMap.get(broadcastId);
-        if (sessionId == null || connectionId == null || connectionId.isBlank()) {
+        if (connectionId == null || connectionId.isBlank()) {
+            return;
+        }
+        String sessionId;
+        try {
+            sessionId = resolveActiveSessionId(broadcastId);
+        } catch (Exception e) {
+            log.error("Failed to resolve OpenVidu session for disconnect: broadcastId={}, message={}",
+                    broadcastId, e.getMessage());
+            return;
+        }
+        if (sessionId == null) {
             return;
         }
 
@@ -204,5 +222,23 @@ public class OpenViduService {
         } catch (Exception e) {
             log.error("Failed to force disconnect: {}", e.getMessage());
         }
+    }
+
+    private String customSessionId(Long broadcastId) {
+        return "broadcast-" + broadcastId;
+    }
+
+    private String resolveActiveSessionId(Long broadcastId) throws OpenViduJavaClientException, OpenViduHttpException {
+        String mapped = sessionMap.get(broadcastId);
+        if (mapped != null) {
+            return mapped;
+        }
+        Session session = openVidu.getActiveSession(customSessionId(broadcastId));
+        if (session == null) {
+            return null;
+        }
+        String sessionId = session.getSessionId();
+        sessionMap.put(broadcastId, sessionId);
+        return sessionId;
     }
 }
