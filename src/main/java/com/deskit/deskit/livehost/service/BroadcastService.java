@@ -110,6 +110,7 @@ public class BroadcastService {
     private static final int RECORDING_RETRY_MAX_ATTEMPTS = 5;
     private static final Duration RECORDING_RETRY_TTL = Duration.ofHours(6);
     private static final Duration RECORDING_RETRY_BASE_DELAY = Duration.ofSeconds(30);
+    private static final Duration RECORDING_RETRY_SUPPRESS_TTL = Duration.ofHours(12);
     private static final int RECORDING_START_RETRY_MAX_ATTEMPTS = 10;
     private static final Duration RECORDING_START_RETRY_TTL = Duration.ofMinutes(30);
     private static final Duration RECORDING_START_RETRY_BASE_DELAY = Duration.ofSeconds(5);
@@ -1045,6 +1046,7 @@ public class BroadcastService {
         redisService.persistVodReactionKeys(broadcastId);
         redisService.deleteBroadcastRuntimeKeys(broadcastId);
         redisService.clearRecordingRetry(broadcastId);
+        redisService.clearRecordingFallbackSuppressed(broadcastId);
     }
 
     private void downloadVodToAdminLocal(String vodUrl, Long broadcastId, String recordingId) {
@@ -1770,8 +1772,12 @@ public class BroadcastService {
             boolean hasResult = broadcastResultRepository.findById(broadcastId).isPresent();
 
             if (!hasVod) {
-                log.info("Missing VOD detected, triggering fallback: broadcastId={}", broadcastId);
-                triggerRecordingFallback(broadcastId, "missing_vod");
+                if (redisService.isRecordingFallbackSuppressed(broadcastId)) {
+                    log.debug("Recording fallback suppressed, skipping recover trigger: broadcastId={}", broadcastId);
+                } else {
+                    log.info("Missing VOD detected, triggering fallback: broadcastId={}", broadcastId);
+                    triggerRecordingFallback(broadcastId, "missing_vod");
+                }
             }
 
             if (!hasResult) {
@@ -1782,13 +1788,20 @@ public class BroadcastService {
     }
 
     private void triggerRecordingFallback(Long broadcastId, String reason) {
+        if (redisService.isRecordingFallbackSuppressed(broadcastId)) {
+            log.debug("Recording fallback suppressed, skipping trigger: broadcastId={}, reason={}", broadcastId, reason);
+            return;
+        }
+
         Broadcast broadcast = broadcastRepository.findById(broadcastId).orElse(null);
         if (broadcast == null) {
             redisService.clearRecordingRetry(broadcastId);
+            redisService.clearRecordingFallbackSuppressed(broadcastId);
             return;
         }
         if (vodRepository.findByBroadcast(broadcast).isPresent()) {
             redisService.clearRecordingRetry(broadcastId);
+            redisService.clearRecordingFallbackSuppressed(broadcastId);
             return;
         }
 
@@ -1838,6 +1851,7 @@ public class BroadcastService {
         int attempt = redisService.incrementRecordingRetryAttempt(broadcastId, RECORDING_RETRY_TTL);
         if (attempt > RECORDING_RETRY_MAX_ATTEMPTS) {
             log.warn("Recording fallback retries exceeded: broadcastId={}, reason={}, status={}", broadcastId, reason, status);
+            redisService.suppressRecordingFallback(broadcastId, RECORDING_RETRY_SUPPRESS_TTL);
             redisService.clearRecordingRetry(broadcastId);
             return;
         }

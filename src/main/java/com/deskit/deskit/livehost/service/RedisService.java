@@ -109,6 +109,10 @@ public class RedisService {
         return "broadcast:recording:retry:" + broadcastId + ":attempts";
     }
 
+    public String getRecordingFallbackSuppressedKey(Long broadcastId) {
+        return "broadcast:recording:retry:" + broadcastId + ":suppressed";
+    }
+
     public String getRecordingStartRetryQueueKey() {
         return "broadcast:recording:start:retry";
     }
@@ -198,6 +202,18 @@ public class RedisService {
     public void clearRecordingRetry(Long broadcastId) {
         redisTemplate.opsForZSet().remove(getRecordingRetryQueueKey(), broadcastId);
         redisTemplate.delete(getRecordingRetryAttemptKey(broadcastId));
+    }
+
+    public void suppressRecordingFallback(Long broadcastId, Duration ttl) {
+        redisTemplate.opsForValue().set(getRecordingFallbackSuppressedKey(broadcastId), "1", ttl);
+    }
+
+    public boolean isRecordingFallbackSuppressed(Long broadcastId) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(getRecordingFallbackSuppressedKey(broadcastId)));
+    }
+
+    public void clearRecordingFallbackSuppressed(Long broadcastId) {
+        redisTemplate.delete(getRecordingFallbackSuppressedKey(broadcastId));
     }
 
     public void clearRecordingStartRetry(Long broadcastId) {
