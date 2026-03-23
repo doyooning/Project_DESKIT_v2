@@ -116,6 +116,9 @@ public class BroadcastService {
     private static final Duration RECORDING_START_RETRY_BASE_DELAY = Duration.ofSeconds(5);
     private static final long SLOT_LOCK_WAIT_MILLIS = 10000L;
     private static final long SLOT_LOCK_LEASE_MILLIS = 10000L;
+    private static final String VIEW_HISTORY_ENTER = "enter";
+    private static final String VIEW_HISTORY_EXIT = "exit";
+    private static final int VIEW_HISTORY_BUFFER_BATCH_SIZE = 500;
 
     private final BroadcastRepository broadcastRepository;
     private final BroadcastProductRepository broadcastProductRepository;
@@ -675,7 +678,7 @@ public class BroadcastService {
         if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
             redisService.updatePeakViewers(broadcastId);
         }
-        recordViewEnter(broadcast, viewerId);
+        enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, uuid);
 
         try {
             Map<String, Object> params = Map.of("role", "SUBSCRIBER");
@@ -694,8 +697,7 @@ public class BroadcastService {
             return;
         }
         redisService.exitLiveRoom(broadcastId, viewerId);
-        broadcastRepository.findById(broadcastId)
-                .ifPresent(broadcast -> recordViewExit(broadcast, viewerId));
+        enqueueViewHistory(VIEW_HISTORY_EXIT, broadcastId, viewerId);
     }
 
     @Transactional
@@ -889,7 +891,7 @@ public class BroadcastService {
                     .filter(broadcast -> broadcast.getStatus() == BroadcastStatus.ON_AIR)
                     .ifPresent(broadcast -> {
                         redisService.updatePeakViewers(broadcastId);
-                        recordViewEnter(broadcast, vId);
+                        enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, vId);
                     });
             Map<String, Object> attrs = accessor.getSessionAttributes();
             if (attrs != null) {
@@ -911,8 +913,7 @@ public class BroadcastService {
             }
             String viewerId = (String) attrs.get("viewerId");
             redisService.exitLiveRoom(broadcastId, viewerId);
-            broadcastRepository.findById(broadcastId)
-                    .ifPresent(broadcast -> recordViewExit(broadcast, viewerId));
+            enqueueViewHistory(VIEW_HISTORY_EXIT, broadcastId, viewerId);
         }
     }
 
@@ -1668,6 +1669,40 @@ public class BroadcastService {
         viewHistoryRepository.closeActiveHistories(broadcast, LocalDateTime.now());
     }
 
+    private void enqueueViewHistory(String type, Long broadcastId, String viewerId) {
+        if (broadcastId == null || viewerId == null || viewerId.isBlank()) {
+            return;
+        }
+        redisService.bufferViewHistory(type, broadcastId, viewerId);
+    }
+
+    private void flushViewHistoryBuffer(String type) {
+        List<ViewHistoryBufferEvent> events = redisService.popViewHistoryBuffer(type, VIEW_HISTORY_BUFFER_BATCH_SIZE).stream()
+                .map(this::parseViewHistoryBufferEvent)
+                .flatMap(Optional::stream)
+                .collect(Collectors.toList());
+        if (events.isEmpty()) {
+            return;
+        }
+
+        Set<ViewHistoryKey> uniqueKeys = new LinkedHashSet<>();
+        for (ViewHistoryBufferEvent event : events) {
+            uniqueKeys.add(new ViewHistoryKey(event.broadcastId(), event.viewerId()));
+        }
+
+        for (ViewHistoryKey key : uniqueKeys) {
+            Broadcast broadcast = broadcastRepository.findById(key.broadcastId()).orElse(null);
+            if (broadcast == null) {
+                continue;
+            }
+            if (VIEW_HISTORY_ENTER.equals(type)) {
+                recordViewEnter(broadcast, key.viewerId());
+            } else if (VIEW_HISTORY_EXIT.equals(type)) {
+                recordViewExit(broadcast, key.viewerId());
+            }
+        }
+    }
+
     @Scheduled(fixedDelay = 60000)
     @Transactional
     public void syncBroadcastSchedules() {
@@ -1759,6 +1794,13 @@ public class BroadcastService {
         for (Long broadcastId : redisService.popDueRecordingRetries(20)) {
             triggerRecordingFallback(broadcastId, "retry_queue");
         }
+    }
+
+    @Scheduled(fixedDelay = 1000)
+    @Transactional
+    public void processViewHistoryBuffer() {
+        flushViewHistoryBuffer(VIEW_HISTORY_ENTER);
+        flushViewHistoryBuffer(VIEW_HISTORY_EXIT);
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -2165,6 +2207,28 @@ public class BroadcastService {
             return null;
         }
         return parseBroadcastId(numeric);
+    }
+
+    private Optional<ViewHistoryBufferEvent> parseViewHistoryBufferEvent(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        String[] parts = raw.split(":", 3);
+        if (parts.length < 2) {
+            return Optional.empty();
+        }
+        Long broadcastId = parseBroadcastId(parts[0]);
+        String viewerId = parts[1];
+        if (broadcastId == null || viewerId == null || viewerId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ViewHistoryBufferEvent(broadcastId, viewerId));
+    }
+
+    private record ViewHistoryBufferEvent(Long broadcastId, String viewerId) {
+    }
+
+    private record ViewHistoryKey(Long broadcastId, String viewerId) {
     }
 
     private Long resolveMemberId(String viewerId) {
