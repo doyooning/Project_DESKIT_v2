@@ -723,6 +723,7 @@ public class BroadcastService {
                 log.warn("Failed to stop OpenVidu recording: broadcastId={}, message={}", broadcastId, e.getMessage());
             }
             openViduService.closeSession(broadcastId);
+            triggerRecordingFallback(broadcastId, "end_broadcast");
             sseService.notifyBroadcastUpdate(broadcastId, "BROADCAST_ENDED", "ended");
         } finally {
             redisService.releaseLock(lockKey);
@@ -2168,15 +2169,12 @@ public class BroadcastService {
 
     private boolean isLiveGroup(BroadcastStatus status) {
         return status == BroadcastStatus.ON_AIR
-                || status == BroadcastStatus.READY
-                || status == BroadcastStatus.ENDED
-                || status == BroadcastStatus.STOPPED;
+                || status == BroadcastStatus.READY;
     }
 
     private boolean shouldUseRealtimeStats(BroadcastStatus status) {
         return status == BroadcastStatus.ON_AIR
-                || status == BroadcastStatus.READY
-                || status == BroadcastStatus.ENDED;
+                || status == BroadcastStatus.READY;
     }
 
     private boolean isJoinableGroup(BroadcastStatus status) {
@@ -2311,7 +2309,7 @@ public class BroadcastService {
     private BroadcastAllResponse getOverview(Long sellerId, boolean isAdmin) {
         List<BroadcastListResponse> onAir = broadcastRepository.findTop5ByStatus(
                 sellerId,
-                List.of(BroadcastStatus.ON_AIR, BroadcastStatus.READY, BroadcastStatus.ENDED, BroadcastStatus.STOPPED),
+                List.of(BroadcastStatus.ON_AIR, BroadcastStatus.READY),
                 BroadcastRepositoryCustom.BroadcastSortOrder.STARTED_AT_DESC,
                 isAdmin
         );

@@ -208,15 +208,11 @@ public class BroadcastRepositoryImpl implements BroadcastRepositoryCustom {
         Condition liveStatuses = broadcastStatus.in(
                 BroadcastStatus.ON_AIR.name(),
                 BroadcastStatus.READY.name(),
-                BroadcastStatus.ENDED.name(),
-                BroadcastStatus.STOPPED.name(),
                 BroadcastStatus.RESERVED.name()
         );
         Condition vodPublic = broadcastStatus.eq(BroadcastStatus.VOD.name())
                 .and(vodStatus.eq(VodStatus.PUBLIC.name()));
-        Condition stoppedWithinWindow = broadcastStatus.ne(BroadcastStatus.STOPPED.name())
-                .or(scheduledAt.isNotNull().and(scheduledAt.ge(LocalDateTime.now().minusMinutes(30))));
-        return liveStatuses.or(vodPublic).and(stoppedWithinWindow);
+        return liveStatuses.or(vodPublic);
     }
 
     private Condition publicFilter(Boolean isPublic) {
@@ -244,9 +240,7 @@ public class BroadcastRepositoryImpl implements BroadcastRepositoryCustom {
         if ("LIVE".equalsIgnoreCase(tab)) {
             return broadcastStatus.in(
                     BroadcastStatus.ON_AIR.name(),
-                    BroadcastStatus.READY.name(),
-                    BroadcastStatus.ENDED.name(),
-                    BroadcastStatus.STOPPED.name()
+                    BroadcastStatus.READY.name()
             );
         }
         if ("RESERVED".equalsIgnoreCase(tab)) {
