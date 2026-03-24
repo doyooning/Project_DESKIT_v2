@@ -55,9 +55,12 @@ import com.deskit.deskit.product.repository.ProductImageRepository;
 import com.deskit.deskit.product.repository.ProductRepository;
 import com.deskit.deskit.tag.entity.TagCategory;
 import com.deskit.deskit.tag.repository.TagCategoryRepository;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.openvidu.java.client.OpenViduHttpException;
 import io.openvidu.java.client.OpenViduJavaClientException;
 import io.openvidu.java.client.Recording;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.DSLContext;
@@ -96,6 +99,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.jooq.impl.DSL.field;
@@ -119,6 +125,11 @@ public class BroadcastService {
     private static final String VIEW_HISTORY_ENTER = "enter";
     private static final String VIEW_HISTORY_EXIT = "exit";
     private static final int VIEW_HISTORY_BUFFER_BATCH_SIZE = 500;
+    private static final String JOIN_STAGE_TIMER = "deskit.join.stage.duration";
+    private static final String JOIN_DB_QUERY_TIMER = "deskit.join.db.query.duration";
+    private static final String JOIN_TOTAL_TIMER = "deskit.join.total.duration";
+    private static final String JOIN_BULKHEAD_REJECTED_COUNTER = "deskit.join.bulkhead.rejected.total";
+    private static final String JOIN_BULKHEAD_ACCEPTED_COUNTER = "deskit.join.bulkhead.accepted.total";
 
     private final BroadcastRepository broadcastRepository;
     private final BroadcastProductRepository broadcastProductRepository;
@@ -142,6 +153,9 @@ public class BroadcastService {
     private final BroadcastScheduleEmailService broadcastScheduleEmailService;
     private final AwsS3Service s3Service;
     private final DSLContext dsl;
+    private final MeterRegistry meterRegistry;
+
+    private final AtomicInteger joinInFlight = new AtomicInteger(0);
 
     @Value("${openvidu.url}")
     private String openViduUrl;
@@ -151,6 +165,22 @@ public class BroadcastService {
 
     @Value("${vod.admin-download-dir:${user.home}/deskit-admin-vod}")
     private String adminVodDownloadDir;
+
+    @Value("${deskit.join.bulkhead.max-concurrent:40}")
+    private int joinBulkheadMaxConcurrent;
+
+    @Value("${deskit.join.slow-threshold-ms:1000}")
+    private long joinSlowThresholdMs;
+
+    @Value("${deskit.join.db.slow-threshold-ms:200}")
+    private long joinDbSlowThresholdMs;
+
+    @PostConstruct
+    void initJoinMetrics() {
+        Gauge.builder("deskit.join.bulkhead.inflight", joinInFlight, AtomicInteger::get)
+                .description("In-flight joinBroadcast requests")
+                .register(meterRegistry);
+    }
 
     @Transactional
     public Long createBroadcast(Long sellerId, BroadcastCreateRequest request) {
@@ -658,33 +688,49 @@ public class BroadcastService {
 
     @Transactional
     public String joinBroadcast(Long broadcastId, String viewerId) {
-        Broadcast broadcast = broadcastRepository.findById(broadcastId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BROADCAST_NOT_FOUND));
-
-        if (broadcast.getStatus() == BroadcastStatus.STOPPED) {
-            throw new BusinessException(ErrorCode.BROADCAST_STOPPED_BY_ADMIN);
-        }
-        if (!isJoinableGroup(broadcast.getStatus())) {
-            throw new BusinessException(ErrorCode.BROADCAST_NOT_ON_AIR);
+        if (!tryAcquireJoinBulkheadSlot()) {
+            throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
         }
 
-        Long memberId = resolveMemberId(viewerId);
-        if (memberId != null && isViewerSanctioned(broadcastId, memberId)) {
-            throw new BusinessException(ErrorCode.BROADCAST_ALREADY_SANCTIONED);
-        }
-
-        String uuid = (viewerId != null) ? viewerId : UUID.randomUUID().toString();
-        redisService.enterLiveRoom(broadcastId, uuid);
-        if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
-            redisService.updatePeakViewers(broadcastId);
-        }
-        enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, uuid);
-
+        long startedAt = System.nanoTime();
+        String result = "success";
         try {
-            Map<String, Object> params = Map.of("role", "SUBSCRIBER");
-            return openViduService.createToken(broadcastId, params);
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.OPENVIDU_ERROR);
+            Broadcast broadcast = recordJoinDbQuery("broadcast.findById", () -> broadcastRepository.findById(broadcastId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.BROADCAST_NOT_FOUND)));
+
+            if (broadcast.getStatus() == BroadcastStatus.STOPPED) {
+                throw new BusinessException(ErrorCode.BROADCAST_STOPPED_BY_ADMIN);
+            }
+            if (!isJoinableGroup(broadcast.getStatus())) {
+                throw new BusinessException(ErrorCode.BROADCAST_NOT_ON_AIR);
+            }
+
+            Long memberId = recordJoinStage("member.resolve", () -> resolveMemberIdForJoin(viewerId));
+            if (memberId != null && recordJoinDbQuery("sanction.findLatest", () -> isViewerSanctioned(broadcastId, memberId))) {
+                throw new BusinessException(ErrorCode.BROADCAST_ALREADY_SANCTIONED);
+            }
+
+            String uuid = (viewerId != null) ? viewerId : UUID.randomUUID().toString();
+            recordJoinStage("liveRoom.enter", () -> {
+                redisService.enterLiveRoom(broadcastId, uuid);
+                if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
+                    redisService.updatePeakViewers(broadcastId);
+                }
+                enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, uuid);
+                return null;
+            });
+
+            return recordJoinStage("openvidu.createToken", () -> createJoinToken(broadcastId));
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == ErrorCode.OPENVIDU_ERROR) {
+                result = "openvidu_error";
+            } else {
+                result = "business_error";
+            }
+            throw e;
+        } finally {
+            recordJoinTotal(result, startedAt);
+            joinInFlight.decrementAndGet();
         }
     }
 
@@ -2234,6 +2280,74 @@ public class BroadcastService {
     }
 
     private record ViewHistoryKey(Long broadcastId, String viewerId) {
+    }
+
+    private boolean tryAcquireJoinBulkheadSlot() {
+        int current = joinInFlight.incrementAndGet();
+        if (current > joinBulkheadMaxConcurrent) {
+            joinInFlight.decrementAndGet();
+            meterRegistry.counter(JOIN_BULKHEAD_REJECTED_COUNTER).increment();
+            return false;
+        }
+        meterRegistry.counter(JOIN_BULKHEAD_ACCEPTED_COUNTER).increment();
+        return true;
+    }
+
+    private void recordJoinTotal(String result, long startedAtNanos) {
+        long elapsed = System.nanoTime() - startedAtNanos;
+        meterRegistry.timer(JOIN_TOTAL_TIMER, "result", result).record(elapsed, TimeUnit.NANOSECONDS);
+        if (TimeUnit.NANOSECONDS.toMillis(elapsed) >= joinSlowThresholdMs) {
+            log.warn("Slow joinBroadcast detected: result={}, elapsedMs={}", result,
+                    TimeUnit.NANOSECONDS.toMillis(elapsed));
+        }
+    }
+
+    private <T> T recordJoinDbQuery(String query, Supplier<T> supplier) {
+        long startedAt = System.nanoTime();
+        try {
+            return supplier.get();
+        } finally {
+            long elapsed = System.nanoTime() - startedAt;
+            meterRegistry.timer(JOIN_DB_QUERY_TIMER, "query", query).record(elapsed, TimeUnit.NANOSECONDS);
+            if (TimeUnit.NANOSECONDS.toMillis(elapsed) >= joinDbSlowThresholdMs) {
+                log.warn("Slow join DB query detected: query={}, elapsedMs={}",
+                        query, TimeUnit.NANOSECONDS.toMillis(elapsed));
+            }
+        }
+    }
+
+    private <T> T recordJoinStage(String stage, Supplier<T> supplier) {
+        long startedAt = System.nanoTime();
+        try {
+            return supplier.get();
+        } finally {
+            long elapsed = System.nanoTime() - startedAt;
+            meterRegistry.timer(JOIN_STAGE_TIMER, "stage", stage).record(elapsed, TimeUnit.NANOSECONDS);
+        }
+    }
+
+    private Long resolveMemberIdForJoin(String viewerId) {
+        Long memberId = parseMemberId(viewerId);
+        if (memberId != null) {
+            return memberId;
+        }
+        if (viewerId == null || viewerId.isBlank()) {
+            return null;
+        }
+        Member member = recordJoinDbQuery("member.findByLoginId", () -> memberRepository.findByLoginId(viewerId));
+        if (member == null) {
+            return null;
+        }
+        return member.getMemberId();
+    }
+
+    private String createJoinToken(Long broadcastId) {
+        Map<String, Object> params = Map.of("role", "SUBSCRIBER");
+        try {
+            return openViduService.createToken(broadcastId, params);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.OPENVIDU_ERROR);
+        }
     }
 
     private Long resolveMemberId(String viewerId) {
