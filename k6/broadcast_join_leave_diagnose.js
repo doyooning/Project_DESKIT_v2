@@ -236,6 +236,15 @@ export default function () {
 export function handleSummary(data) {
   const dropped = data.metrics.dropped_iterations?.values?.count || 0;
   const p95 = data.metrics.http_req_duration?.values?.['p(95)'] || 0;
+  const httpReqFailedRate = data.metrics.http_req_failed?.values?.rate ?? 0;
+  const joinSuccessRateValue = data.metrics.join_success_rate?.values?.rate ?? 0;
+  const leaveSuccessRateValue = data.metrics.leave_success_rate?.values?.rate ?? 0;
+  const joinFailuresCount = data.metrics.join_failures?.values?.count || 0;
+  const leaveFailuresCount = data.metrics.leave_failures?.values?.count || 0;
+  const join4xxCount = data.metrics.join_4xx?.values?.count || 0;
+  const join5xxCount = data.metrics.join_5xx?.values?.count || 0;
+  const leave4xxCount = data.metrics.leave_4xx?.values?.count || 0;
+  const leave5xxCount = data.metrics.leave_5xx?.values?.count || 0;
 
   return {
     stdout: JSON.stringify(
@@ -256,6 +265,15 @@ export function handleSummary(data) {
           p95Ms: Number(p95.toFixed(2)),
           droppedIterations: dropped,
           maxVUs: data.metrics.vus_max?.values?.max || 0,
+          httpReqFailedRate: Number(httpReqFailedRate.toFixed(6)),
+          joinSuccessRate: Number(joinSuccessRateValue.toFixed(6)),
+          leaveSuccessRate: Number(leaveSuccessRateValue.toFixed(6)),
+          joinFailures: joinFailuresCount,
+          leaveFailures: leaveFailuresCount,
+          join4xx: join4xxCount,
+          join5xx: join5xxCount,
+          leave4xx: leave4xxCount,
+          leave5xx: leave5xxCount,
         },
       },
       null,

@@ -72,6 +72,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -154,6 +155,7 @@ public class BroadcastService {
     private final AwsS3Service s3Service;
     private final DSLContext dsl;
     private final MeterRegistry meterRegistry;
+    private final TransactionTemplate transactionTemplate;
 
     private final AtomicInteger joinInFlight = new AtomicInteger(0);
 
@@ -686,7 +688,6 @@ public class BroadcastService {
         }
     }
 
-    @Transactional
     public String joinBroadcast(Long broadcastId, String viewerId) {
         if (!tryAcquireJoinBulkheadSlot()) {
             throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
@@ -695,25 +696,12 @@ public class BroadcastService {
         long startedAt = System.nanoTime();
         String result = "success";
         try {
-            Broadcast broadcast = recordJoinDbQuery("broadcast.findById", () -> broadcastRepository.findById(broadcastId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BROADCAST_NOT_FOUND)));
-
-            if (broadcast.getStatus() == BroadcastStatus.STOPPED) {
-                throw new BusinessException(ErrorCode.BROADCAST_STOPPED_BY_ADMIN);
-            }
-            if (!isJoinableGroup(broadcast.getStatus())) {
-                throw new BusinessException(ErrorCode.BROADCAST_NOT_ON_AIR);
-            }
-
-            Long memberId = recordJoinStage("member.resolve", () -> resolveMemberIdForJoin(viewerId));
-            if (memberId != null && recordJoinDbQuery("sanction.findLatest", () -> isViewerSanctioned(broadcastId, memberId))) {
-                throw new BusinessException(ErrorCode.BROADCAST_ALREADY_SANCTIONED);
-            }
+            BroadcastStatus broadcastStatus = loadJoinStatusWithValidation(broadcastId, viewerId);
 
             String uuid = (viewerId != null) ? viewerId : UUID.randomUUID().toString();
             recordJoinStage("liveRoom.enter", () -> {
                 redisService.enterLiveRoom(broadcastId, uuid);
-                if (broadcast.getStatus() == BroadcastStatus.ON_AIR) {
+                if (broadcastStatus == BroadcastStatus.ON_AIR) {
                     redisService.updatePeakViewers(broadcastId);
                 }
                 enqueueViewHistory(VIEW_HISTORY_ENTER, broadcastId, uuid);
@@ -732,6 +720,27 @@ public class BroadcastService {
             recordJoinTotal(result, startedAt);
             joinInFlight.decrementAndGet();
         }
+    }
+
+    private BroadcastStatus loadJoinStatusWithValidation(Long broadcastId, String viewerId) {
+        return transactionTemplate.execute(status -> {
+            Broadcast broadcast = recordJoinDbQuery("broadcast.findById", () -> broadcastRepository.findById(broadcastId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.BROADCAST_NOT_FOUND)));
+
+            if (broadcast.getStatus() == BroadcastStatus.STOPPED) {
+                throw new BusinessException(ErrorCode.BROADCAST_STOPPED_BY_ADMIN);
+            }
+            if (!isJoinableGroup(broadcast.getStatus())) {
+                throw new BusinessException(ErrorCode.BROADCAST_NOT_ON_AIR);
+            }
+
+            Long memberId = recordJoinStage("member.resolve", () -> resolveMemberIdForJoin(viewerId));
+            if (memberId != null && recordJoinDbQuery("sanction.findLatest", () -> isViewerSanctioned(broadcastId, memberId))) {
+                throw new BusinessException(ErrorCode.BROADCAST_ALREADY_SANCTIONED);
+            }
+
+            return broadcast.getStatus();
+        });
     }
 
     @Transactional
