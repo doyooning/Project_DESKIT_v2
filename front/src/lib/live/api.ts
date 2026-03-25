@@ -1,9 +1,9 @@
 import {http} from '../../api/http'
 import {parseLiveDate} from './utils'
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-const JOIN_MAX_ATTEMPTS = 5
+const JOIN_MAX_ATTEMPTS = 7
 const JOIN_BACKOFF_BASE_MS = 300
-const JOIN_BACKOFF_MAX_MS = 2500
+const JOIN_BACKOFF_MAX_MS = 4000
 
 export type BroadcastCategory = {
   id: number
