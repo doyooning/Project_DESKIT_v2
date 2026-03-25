@@ -133,12 +133,107 @@ private void releaseDbSlotLock(String lockKey) {
 ![](https://velog.velcdn.com/images/doyooning/post/52b84765-3037-4000-8d71-a9a0665240ea/image.jpg)
 - 테스트를 반복 실행해도 항상 같은 결과값(예약 성공 3건, 실패 7건) 반환
 
+### 2. 방송 입장/퇴장 성능 테스트
+**문제 상황**
+- K6를 활용한 방송 성능 테스트 중, 성능 저하 상태 확인
+> 테스트 목적: 시청자 입장/퇴장으로 방송 기능의 성능 점검
+
+테스트 조건 및 결과
+- 조건: 
+  - VU: 400, Iteration: 20
+  - p95 임계값: 1500ms
+  - 성공 임계값: 95%
+  - 체류 시간: 최소 1초, 최대 5초
+
+
+- 결과: 성능 병목 상태
+  - p95 응답시간: 24.6초 / 기준 1.5초
+  - 드랍된 요청: 1474건
+  - 성능 기준 충족 실패
+
+문제 원인:
+- 구체적인 원인 파악 위해 테스트 시나리오 재작성, 성능 병목 부분 재점검
+1. 체류 시간 영향 제거(최소 0.1초, 최대 0.5초)
+   - 체류 영향을 최소화해 join/leave API 경로 자체의 성능을 분리 측정
+   ![](https://velog.velcdn.com/images/doyooning/post/ff6a5881-6802-4c9c-a7a9-7df18f8417cf/image.jpg)
+   - 결과: 여전히 성능 기준 미달
+     - p95 응답시간: 19.3초 / 기준 1.5초
+     - 드랍된 요청: 864건
+     - 성능 기준 충족 실패
+   - 일부 개선되나 여전히 문제 존재, API/백엔드 경로에서 병목 의심
+
+
+2. 입장/퇴장 분리하여 테스트
+   - 입장(join)만 테스트
+     ![](https://velog.velcdn.com/images/doyooning/post/a1f7a579-f6e4-43ef-920b-c60eee649cdd/image.jpg)
+   - 결과: **입장 기능**이 핵심 병목
+     - p95 응답시간: 38.2초 / 기준 1.5초
+     - 드랍된 요청: 769건
+     - 성능 기준 충족 실패
+
+   - 퇴장(leave)만 테스트
+     ![](https://velog.velcdn.com/images/doyooning/post/b4056bff-ed7f-4a97-b20a-d652fb9422b0/image.jpg)
+   - 결과: 문제 없음
+     - p95 응답시간: 0.025초 / 기준 1.5초
+     - 드랍된 요청: 0건
+     - 테스트 성공
+
+
+3. 성능 모니터링 도구 도입
+  (Prometheus를 통한 시계열 메트릭 수집 + Grafana를 통한 데이터 시각화)
+   - 모니터링 패널 구성
+   ![](https://velog.velcdn.com/images/doyooning/post/b42ca4b7-6089-4587-bab7-5fb7b1accb06/image.jpg)
+   ![](https://velog.velcdn.com/images/doyooning/post/8f232483-d17e-421d-9f52-c1cd954cd52b/image.jpg)
+   결과:
+     - 커넥션 풀 최대치를 넘겨 요청이 막힘, 대기열 폭증 및 지연 발생
+     - 서버가 먹통이 됨(App up=0)
+     
+
+4. 개선 1) 서버 안정성 유지
+   - 요청 폭주로 인해 서버가 먹통이 되는 문제 우선 해결
+   - 최적화 방안:
+     - 트랜잭션 분리: DB 조회 + 제재 내역 검사까지만 읽기 전용, 토큰 발급은 트랜젝션 밖에서 실행
+     - 서버 보호값 설정: Tomcat과 HikariCP의 timeout을 짧게 조정
+       ![](https://velog.velcdn.com/images/doyooning/post/61560336-f56c-44f8-9cce-f6d683e85ead/image.jpg)
+       ![](https://velog.velcdn.com/images/doyooning/post/71be329c-5014-4be7-a030-557ea02c40e6/image.jpg)
+       결과: 
+         - 서버는 안정적으로 유지됨(App up=1)
+         - p95 응답시간 만족, 그러나 성능 기준 만족 실패(성공률 66%)
+
+
+5. 개선 2) 세부 원인 진단
+   - 성능 기준을 만족시키기 위해 병목 지점 파악 및 개선
+   - 최적화 방안:
+     - Grafana 패널 지표 추가(토큰 발급 요청, DB 쿼리 등)
+     - 5xx -> 429 응답으로 처리, 입장 재시도 조정
+       ![](https://velog.velcdn.com/images/doyooning/post/10ad638b-fe95-4bff-9c1c-5d9670bda3cd/image.jpg)
+       ![](https://velog.velcdn.com/images/doyooning/post/015b4457-491e-4186-9240-386fd264a79e/image.jpg)
+       ![](https://velog.velcdn.com/images/doyooning/post/606a7931-6de5-4d01-bba9-345f591638a3/image.jpg)
+       결과:
+         - 5xx 응답 0건으로 백엔드 장애성 실패 사라짐
+         - p95 응답시간 약간 초과, 성능 기준 만족 실패(성공률 80% - 429 다수)
+         - 토큰 발급 요청이 2s대로 급상승, DB 쿼리는 수십 ms 수준(병목 아님)
+
+
+6. 개선 3) OpenVidu 서버 측 성능 개선
+   - OpenVidu 토큰 발급 단계에서 지연 발생 파악
+   - 최적화 방안:
+     - 서버 인프라 성능 상향(서버 인스턴스를 t3.large -> t3.xlarge로 상향)
+       ![](https://velog.velcdn.com/images/doyooning/post/081b6d7a-e925-435b-9028-2e4fa6aea740/image.jpg)
+       ![](https://velog.velcdn.com/images/doyooning/post/e8b4f187-2f8e-47a0-a91c-66f36574d5b3/image.jpg)
+       결과: 
+         - p95 응답시간 145ms, 드랍된 요청 0건으로 성능 기준 합격
+         - 테스트 성공
+
+최종 상태:
+방송 입장 성능 개선
+> 서버 안정화 </br>
+> p95: 24.3초 -> 0.1초 </br>
+> 드랍된 요청: 1474건 -> 0건 </br>
+
 ---
 ## 향후 진행 계획
-### 1. 성능 모니터링 도입
-- 현재 K6를 사용하여 테스트 진행중, 실시간 성능 및 병목 지점 판단을 위해 모니터링 도구 도입 예정
-
-### 2. RAG 기반 챗봇의 기능 및 사용자 경험 개선
+### 1. RAG 기반 챗봇의 기능 및 사용자 경험 개선
 - RAG에 사용될 문서 임베딩 및 벡터 검색 관련하여 확장성을 고려한 최적화 필요 예상
 - AI 응답의 구조화가 더 필요, Tool Calling 사용하여 개선 예정
 - 챗봇의 UX 측면 개선 예정
