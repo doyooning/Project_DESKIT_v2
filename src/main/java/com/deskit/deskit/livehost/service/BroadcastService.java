@@ -1047,6 +1047,7 @@ public class BroadcastService {
 
         if (vodRepository.findByBroadcast(broadcast).isPresent()) {
             log.info("VOD already processed: broadcastId={}", broadcastId);
+            promoteBroadcastToVodIfReady(broadcast);
             redisService.clearRecordingRetry(broadcastId);
             return;
         }
@@ -1079,6 +1080,7 @@ public class BroadcastService {
                 .vodAdminLock(isStopped)
                 .build();
         vodRepository.save(vod);
+        promoteBroadcastToVodIfReady(broadcast);
 
         int uv = redisService.getTotalUniqueViewerCount(broadcastId);
         int likes = redisService.getLikeCount(broadcastId);
@@ -1886,6 +1888,10 @@ public class BroadcastService {
             boolean hasVod = vodRepository.findByBroadcast(broadcast).isPresent();
             boolean hasResult = broadcastResultRepository.findById(broadcastId).isPresent();
 
+            if (hasVod) {
+                promoteBroadcastToVodIfReady(broadcast);
+            }
+
             if (!hasVod) {
                 if (redisService.isRecordingFallbackSuppressed(broadcastId)) {
                     log.debug("Recording fallback suppressed, skipping recover trigger: broadcastId={}", broadcastId);
@@ -2308,6 +2314,17 @@ public class BroadcastService {
         if (TimeUnit.NANOSECONDS.toMillis(elapsed) >= joinSlowThresholdMs) {
             log.warn("Slow joinBroadcast detected: result={}, elapsedMs={}", result,
                     TimeUnit.NANOSECONDS.toMillis(elapsed));
+        }
+    }
+
+    private void promoteBroadcastToVodIfReady(Broadcast broadcast) {
+        if (broadcast == null) {
+            return;
+        }
+        if (broadcast.getStatus() == BroadcastStatus.ENDED || broadcast.getStatus() == BroadcastStatus.STOPPED) {
+            validateTransition(broadcast.getStatus(), BroadcastStatus.VOD);
+            broadcast.changeStatus(BroadcastStatus.VOD);
+            restoreOriginalProductPrice(broadcast);
         }
     }
 
