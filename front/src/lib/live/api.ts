@@ -1,6 +1,9 @@
 import {http} from '../../api/http'
 import {parseLiveDate} from './utils'
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+const JOIN_MAX_ATTEMPTS = 5
+const JOIN_BACKOFF_BASE_MS = 300
+const JOIN_BACKOFF_MAX_MS = 2500
 
 export type BroadcastCategory = {
   id: number
@@ -256,6 +259,35 @@ const ensureSuccess = <T>(response: ApiResult<T>) => {
   throw {message, code: error?.code}
 }
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const parseRetryAfterMs = (retryAfter: unknown): number | null => {
+  if (typeof retryAfter !== 'string') return null
+  const sec = Number(retryAfter)
+  if (!Number.isNaN(sec) && sec >= 0) return Math.round(sec * 1000)
+  const until = Date.parse(retryAfter)
+  if (Number.isNaN(until)) return null
+  return Math.max(0, until - Date.now())
+}
+
+const isRateLimitedError = (error: unknown): boolean => {
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return status === 429
+}
+
+const getRetryAfterMs = (error: unknown): number | null => {
+  const headers = (error as { response?: { headers?: Record<string, unknown> } })?.response?.headers
+  return parseRetryAfterMs(headers?.['retry-after'])
+}
+
+const computeBackoffMs = (attempt: number, retryAfterMs: number | null): number => {
+  if (retryAfterMs != null && retryAfterMs > 0) {
+    return Math.min(retryAfterMs, JOIN_BACKOFF_MAX_MS)
+  }
+  const exp = JOIN_BACKOFF_BASE_MS * Math.pow(2, attempt - 1)
+  const jitter = Math.floor(Math.random() * 100)
+  return Math.min(exp + jitter, JOIN_BACKOFF_MAX_MS)
+}
 const inflight = new Map<string, Promise<any>>()
 
 const withInFlight = async <T>(key: string, request: () => Promise<T>): Promise<T> => {
@@ -388,8 +420,23 @@ export const fetchBroadcastStats = async (broadcastId: number): Promise<Broadcas
 
 export const joinBroadcast = async (broadcastId: number, viewerId?: string | null): Promise<string> => {
   const headers = viewerId ? { 'X-Viewer-Id': viewerId } : undefined
-  const { data } = await http.post<ApiResult<string>>(`/api/broadcasts/${broadcastId}/join`, null, { headers })
-  return ensureSuccess(data)
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= JOIN_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const { data } = await http.post<ApiResult<string>>(`/api/broadcasts/${broadcastId}/join`, null, { headers })
+      return ensureSuccess(data)
+    } catch (error) {
+      lastError = error
+      if (!isRateLimitedError(error) || attempt === JOIN_MAX_ATTEMPTS) {
+        throw error
+      }
+      const retryAfterMs = getRetryAfterMs(error)
+      await wait(computeBackoffMs(attempt, retryAfterMs))
+    }
+  }
+
+  throw lastError
 }
 
 export const leaveBroadcast = async (broadcastId: number, viewerId?: string | null): Promise<void> => {
